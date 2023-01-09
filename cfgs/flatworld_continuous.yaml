@@ -1,0 +1,32 @@
+env:
+  file: <class 'envs.flatworld.flatworld_continuous'>
+logger:
+  dir_name: FlatWorld
+ltl:
+  autobuild: False
+  formula: "G F (y & X F r) & G!b"
+  oa_type: ldba
+  rabinizer: ./rabinizer4/bin/ltl2ldba
+ppo:
+  action_std: 2.5                   # starting std for action distribution (Multivariate Normal)
+  temp_decay_type: 'exponential'
+  temp_decay_rate: 0.98       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
+  min_action_temp: 0.05             # minimum action_std (stop decay after action_std <= min_action_std)
+  temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
+  K_epochs: 10               # update policy for K epochs in one PPO update
+  eps_clip: 0.4          # clip parameter for PPO
+  lr_actor: 0.0003       # learning rate for actor network
+  lr_critic: 0.01       # learning rate for critic network
+  update_timestep: 1 # T * 4
+  update_freq__n_episodes: 1
+testing:
+  testing_freq__n_episodes: 1
+  num_rollouts: 1
+gamma: .95
+n_grad_updates: 1
+n_traj: 10000
+delta: .1
+n_seeds: 3
+init_seed: 314
+T: 100
+replay_buffer_size: 5000

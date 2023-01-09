@@ -1,0 +1,34 @@
+env:
+  file: <class 'envs.pacman.pacman'>
+  J: 100
+  c_min: 1
+lcrl:
+  episode_num: 10000
+  iteration_num_max: 100
+  discount_factor: .99
+  learning_rate: .95
+  validate_every_K: 20000
+  num_validations: 10
+logger:
+  dir_name: pacman
+ltl:
+  autobuild: False
+  formula: "F(food0) & G!ghost"
+  oa_type: ldba
+  rabinizer: ./rabinizer4/bin/ltl2ldba
+q_learning:
+  batches_per_update: 200
+  batch_size: 512
+  update_freq__n_episodes: 1
+  init_temp: .2
+  temp_decay_freq__n_episodes: 400
+  temp_decay_rate: .05
+  min_action_temp: 0.
+gamma: .999
+n_grad_updates: 1
+n_traj: 10000
+delta: .1
+n_seeds: 3
+init_seed: 314
+T: 100
+replay_buffer_size: 50000

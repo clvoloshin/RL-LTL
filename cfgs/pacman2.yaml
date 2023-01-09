@@ -1,0 +1,27 @@
+env:
+  file: <class 'envs.pacman.pacman'>
+  J: 100
+  c_min: 1
+algo:
+  override_AEC: 50
+  max_N: 100_000_000
+  Ns: 
+    - 2
+lcrl:
+  episode_num: 10000
+  iteration_num_max: 100
+  discount_factor: .99
+  learning_rate: .95
+  validate_every_K: 20000
+  num_validations: 10
+logger:
+  dir_name: pacman_tmp
+ltl:
+  autobuild: False
+  formula: "F(food0) & G!ghost"
+  oa_type: ldba
+  rabinizer: ./rabinizer4/bin/ltl2ldba
+eps: 3
+delta: .1
+seeds:
+- 1

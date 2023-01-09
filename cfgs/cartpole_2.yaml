@@ -1,0 +1,23 @@
+env:
+  file: <class 'envs.cartpole.cartpole'>
+logger:
+  dir_name: CartpoleDecreasingLR
+eps: 10
+gamma: .99
+T: 200
+second_order:
+  lr: 1.0e-2
+  trust_region: 1.0e-1
+  cg_steps: 100
+# mono:
+#   lr: 1.0e-1
+reinforce:
+  lr: 1.0e-2
+# avg_reinforce:
+#   lr: 1.0e-2
+batch_size: 1
+n_grad_updates: 1
+n_traj: 500
+delta: .1
+n_seeds: 20
+init_seed: 314
