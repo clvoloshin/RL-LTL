@@ -36,5 +36,5 @@ Note: Must have java >8 installed as well to run Rabinizer.
 ### Examples
 
 ```
-python experiment.py simple_mdp3.json
+python3 run.py flatworld_continuous.yaml --restart
 ```
