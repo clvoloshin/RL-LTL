@@ -10,7 +10,6 @@ import numpy as np
 
 from policies.actor_critic import ActorCritic, RolloutBuffer
 
-
 ################################## set device ##################################
 print("============================================================================================")
 # set device to cpu or cuda
