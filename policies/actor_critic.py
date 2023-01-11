@@ -34,18 +34,21 @@ class Trajectory:
         self.is_eps = []
         self.logprobs = []
         self.counter = 0
+        self.done = False
         self.has_reward = False
         self.action_placeholder = action_placeholder # should be of MDP action shape
     
     def add(self, s, b, a, r, s_, b_, is_eps, act_idx, logprob):
         self.counter += 1
+        # if r > 0: import pdb; pdb.set_trace()
         self.states.append(s)
         self.buchis.append(b)
         self.next_states.append(s_)
         self.next_buchis.append(b_)
         self.actions.append(a if not is_eps else self.action_placeholder)
-        self.rewards.append(r)
+        self.rewards.append(r if r >= 0 else 0)
         self.has_reward = self.has_reward or (r > 0)
+        self.done = self.done or (r < 0)
         self.is_eps.append(is_eps)
         self.act_idxs.append(act_idx)
         self.logprobs.append(logprob)
@@ -90,24 +93,27 @@ class RolloutBuffer:
     def make_trajectories(self, env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs):
         if not is_eps:
             assert act_idx == 0
+            current_terminal_buchis = set([traj.get_last_buchi() for traj in self.trajectories if not traj.done])
             for buchi_state in range(env.observation_space['buchi'].n):
+                if buchi_state in current_terminal_buchis: continue
                 traj = Trajectory(self.action_placeholder)
-                next_buchi_state, is_accepting = env.next_buchi(s_, buchi_state)
-                traj.add(s, buchi_state, a, is_accepting, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
+                next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
+                traj.add(s, buchi_state, a, accepting_rejecting_neutal, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
                 self.trajectories.append(traj)
             
                 # also add epsilon transition 
                 try:                        
                     for eps_idx in range(env.action_space[buchi_state].n):
+                        # import pdb; pdb.set_trace()
                         traj = Trajectory(self.action_placeholder)
                         
                         # make epsilon transition
-                        next_buchi_state, is_accepting = env.next_buchi(s, buchi_state, eps_idx)
-                        traj.add(s, buchi_state, a, is_accepting, s, next_buchi_state, True, 1 + eps_idx, logprobs[buchi_state][1 + eps_idx])
+                        next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s, buchi_state, eps_idx)
+                        traj.add(s, buchi_state, a, accepting_rejecting_neutal, s, next_buchi_state, True, 1 + eps_idx, logprobs[buchi_state][1 + eps_idx])
                     
                         # resync trajectory with s_
-                        next_next_buchi_state, is_accepting = env.next_buchi(s_, next_buchi_state)
-                        traj.add(s, next_buchi_state, a, is_accepting, s_, next_next_buchi_state, is_eps, act_idx, logprobs[next_buchi_state][act_idx])
+                        next_next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, next_buchi_state)
+                        traj.add(s, next_buchi_state, a, accepting_rejecting_neutal, s_, next_next_buchi_state, is_eps, act_idx, logprobs[next_buchi_state][act_idx])
                         self.trajectories.append(traj)
                 except:
                     pass
@@ -119,36 +125,37 @@ class RolloutBuffer:
         if not is_eps:
             # update all trajectories
             for traj in self.trajectories:
+                if traj.done == True: continue
                 buchi_state = traj.get_last_buchi()
             
-                # # First add epsilon transitions if possible
-                # try:                        
-                #     for eps_idx in range(env.action_space[buchi_state].n):
-                #         # tic = time.time()
-                #         traj_copy = traj.copy()
-                #         # traj_copy = Trajectory(self.action_placeholder)
-                #         # print('CopyTime', time.time() - tic)
+                # First add epsilon transitions if possible
+                try:                        
+                    for eps_idx in range(env.action_space[buchi_state].n):
+                        # tic = time.time()
+                        traj_copy = traj.copy()
+                        # traj_copy = Trajectory(self.action_placeholder)
+                        # print('CopyTime', time.time() - tic)
                         
-                #         # make epsilon transition
-                #         next_buchi_state, is_accepting = env.next_buchi(s, buchi_state, eps_idx)
-                #         traj_copy.add(s, buchi_state, a, is_accepting, s, next_buchi_state, True, 1 + eps_idx, logprobs[buchi_state][1 + eps_idx])
+                        # make epsilon transition
+                        next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s, buchi_state, eps_idx)
+                        traj_copy.add(s, buchi_state, a, accepting_rejecting_neutal, s, next_buchi_state, True, 1 + eps_idx, logprobs[buchi_state][1 + eps_idx])
                     
-                #         # resync trajectory with s_
-                #         next_next_buchi_state, is_accepting = env.next_buchi(s_, next_buchi_state)
-                #         traj_copy.add(s, next_buchi_state, a, is_accepting, s_, next_next_buchi_state, is_eps, act_idx, logprobs[next_buchi_state][act_idx])
-                #         new_trajectories.append(traj_copy)
-                # except:
-                #     pass
+                        # resync trajectory with s_
+                        next_next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, next_buchi_state)
+                        traj_copy.add(s, next_buchi_state, a, accepting_rejecting_neutal, s_, next_next_buchi_state, is_eps, act_idx, logprobs[next_buchi_state][act_idx])
+                        new_trajectories.append(traj_copy)
+                except:
+                    pass
 
-                next_buchi_state, is_accepting = env.next_buchi(s_, buchi_state)
-                traj.add(s, buchi_state, a, is_accepting, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
+                next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
+                traj.add(s, buchi_state, a, accepting_rejecting_neutal, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
         else:
             # only update first (main), non-hallucinated, trajectory.
             if len(self.trajectories) == 0: return
             traj = self.trajectories[0]
             buchi_state = traj.get_last_buchi()
-            next_buchi_state, is_accepting = env.next_buchi(s_, buchi_state)
-            traj.add(s, buchi_state, a, is_accepting, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
+            next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
+            traj.add(s, buchi_state, a, accepting_rejecting_neutal, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
         
         for traj in new_trajectories:
             self.trajectories.append(traj)
@@ -244,7 +251,7 @@ class ActorCritic(nn.Module):
 
             with torch.no_grad():
                 # bias towards no epsilons in the beginning
-                self.action_switch.bias[::action_dim['total']] = 10.
+                self.action_switch.bias[::action_dim['total']] = 5.
                                         
 
             self.main_shp = (state_dim['buchi'].n, self.action_dim)

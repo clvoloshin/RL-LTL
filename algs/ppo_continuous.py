@@ -86,7 +86,7 @@ class PPO:
     
     def update(self):
         self.num_updates_called += 1
-        
+
         # Optimize policy for K epochs
         for k in range(self.K_epochs):
 
@@ -196,10 +196,13 @@ def run_ppo_continuous(param, env, second_order = False):
 
     for i_episode in range(param['n_traj']):
         # TRAINING
+
+        # Get trajectory
         # tic = time.time()
         ep_reward, disc_ep_reward, t = rollout(env, agent, param, i_episode, testing=False)
         # toc = time.time() - tic
 
+        # update weights
         # tic = time.time()
         agent.update()
         # toc2 = time.time() - tic

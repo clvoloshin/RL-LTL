@@ -129,7 +129,13 @@ class Simulator(gym.Env):
             self.automaton.set_state(desired_current_aut_state)
             automaton_state = self.automaton.step(label)
             self.automaton.set_state(current_aut_state)
-            return automaton_state, int(automaton_state in self.automaton.automaton.accepting_states)
+            if automaton_state in self.automaton.automaton.accepting_states:
+                accepting_rejecting_neutral = 1
+            elif automaton_state == (self.automaton.automaton.n_states - 1):
+                accepting_rejecting_neutral = -1
+            else:
+                accepting_rejecting_neutral = 0
+            return automaton_state, accepting_rejecting_neutral
         else:
             current_aut_state = self.automaton.get_state()
             label, _ = self.mdp.label(mdp_state)
@@ -137,7 +143,13 @@ class Simulator(gym.Env):
             automaton_state = self.automaton.epsilon_step(eps_action)
             automaton_state = self.automaton.step(label) # Do we take this step right now???
             self.automaton.set_state(current_aut_state)
-            return automaton_state, int(automaton_state in self.automaton.automaton.accepting_states)
+            if automaton_state in self.automaton.automaton.accepting_states:
+                accepting_rejecting_neutral = 1
+            elif automaton_state == (self.automaton.automaton.n_states - 1):
+                accepting_rejecting_neutral = -1
+            else:
+                accepting_rejecting_neutral = 0
+            return automaton_state, accepting_rejecting_neutral
     
     # @timeit
     def step(self, action, is_eps=False):

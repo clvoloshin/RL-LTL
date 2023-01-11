@@ -63,13 +63,14 @@ class FlatWorld(gym.Env):
         # self.obs_3 = np.array([0.0, 0.0, 0.4])            # blue circle in the center
         # self.obs_4 = np.array([-1.0, -0.7, -0.2, 0.5])    # orange box on the left
 
-        self.goal = np.array([1, 1, .2])
+        # self.goal = np.array([1, 1, .2])
         self.obs_1 = np.array([.9/2, -1.5/2., .3])     # red box in bottom right corner
         self.obs_2 = np.array([.9/2, 1., .3])        # green box in top right corner
-        self.obs_3 = np.array([0.0, 0.0, 0.4])            # blue circle in the center
+        self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
         self.obs_4 = np.array([-1.7/2, .3/2, .3])    # orange box on the left
         
-        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        # self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        self.circles = [(self.obs_1, 'r'), (self.obs_4, 'y'), (self.obs_3, 'b')]
 
         self.state = np.array([-1, -1])
         self.render_mode = render_mode
@@ -149,17 +150,18 @@ class FlatWorld(gym.Env):
         for obs, color in self.circles:
             self.ax.plot([obs[0] + obs[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [obs[1] + obs[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)], c=color, linewidth=2)
         
-        for obs, color in [(self.goal, 'orange')]:
-            self.ax.plot([obs[0] + obs[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [obs[1] + obs[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)], c=color, linewidth=2)
+        # for obs, color in [(self.goal, 'orange')]:
+        #     self.ax.plot([obs[0] + obs[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [obs[1] + obs[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)], c=color, linewidth=2)
+        
         # plt.plot([self.obs_1[0], self.obs_1[0], self.obs_1[1], self.obs_1[1], self.obs_1[0]], [self.obs_1[2], self.obs_1[3], self.obs_1[3], self.obs_1[2], self.obs_1[2]], c="red", linewidth=5)
         # plt.plot([self.obs_2[0], self.obs_2[0], self.obs_2[1], self.obs_2[1], self.obs_2[0]], [self.obs_2[2], self.obs_2[3], self.obs_2[3], self.obs_2[2], self.obs_2[2]], c="green", linewidth=5)
         # plt.plot([self.obs_4[0], self.obs_4[0], self.obs_4[1], self.obs_4[1], self.obs_4[0]], [self.obs_4[2], self.obs_4[3], self.obs_4[3], self.obs_4[2], self.obs_4[2]], c="orange", linewidth=5)
         # plt.plot([self.obs_3[0] + self.obs_3[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [self.obs_3[1] + self.obs_3[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)], c="blue", linewidth=5)
 
         self.ax.scatter([self.state[0]], [self.state[1]], s=100, marker='x', c="k")
-        self.ax.scatter([self.goal[0]], [self.goal[1]], s=20, marker='*', c="orange")
-        self.ax.set_xlim([-7, 7])
-        self.ax.set_ylim([-7, 7])
+        # self.ax.scatter([self.goal[0]], [self.goal[1]], s=20, marker='*', c="orange")
+        self.ax.set_xlim([-3, 3])
+        self.ax.set_ylim([-3, 3])
         # self.ax.axis('equal')
-        self.ax.grid()
+        # self.ax.grid()
         # plt.show(block=False)
