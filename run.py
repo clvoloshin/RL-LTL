@@ -25,7 +25,7 @@ def main(seed, param, to_redo):
     logger.info('*'*20 + '\tLTL: %s' % automaton.automaton.formula)
 
     dir = os.path.join(param['logger']['dir_name'], 'ours_q', 'experiment_%05.f' % (seed) )
-    if to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir)):
+    if ('discrete' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
         logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)
@@ -44,7 +44,7 @@ def main(seed, param, to_redo):
         run_Q_learning(param, sim, False, not is_discrete_obs_space, to_hallucinate=True)
     
     dir = os.path.join(param['logger']['dir_name'], 'baseline_q', 'experiment_%05.f' % (seed) )
-    if to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir)):
+    if ('discrete' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
         logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)
@@ -63,7 +63,7 @@ def main(seed, param, to_redo):
         run_Q_learning(param, sim, False, not is_discrete_obs_space, to_hallucinate=False)
 
     dir = os.path.join(param['logger']['dir_name'], 'ours_ppo', 'experiment_%05.f' % (seed) )
-    if to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir)):
+    if ('continuous' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
         logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)
@@ -82,7 +82,7 @@ def main(seed, param, to_redo):
         run_ppo_continuous(param, sim, False, to_hallucinate=True)
     
     dir = os.path.join(param['logger']['dir_name'], 'baseline_ppo', 'experiment_%05.f' % (seed) )
-    if to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir)):
+    if ('continuous' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
         logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)

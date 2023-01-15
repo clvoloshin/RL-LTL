@@ -12,16 +12,16 @@ import time
 from tqdm import tqdm
 
 ################################## set device ##################################
-print("============================================================================================")
+# print("============================================================================================")
 # set device to cpu or cuda
 device = torch.device('cpu')
-if(torch.cuda.is_available()): 
-    device = torch.device('cuda:0') 
-    torch.cuda.empty_cache()
-    print("Device set to : " + str(torch.cuda.get_device_name(device)))
-else:
-    print("Device set to : cpu")
-print("============================================================================================")
+# if(torch.cuda.is_available()): 
+#     device = torch.device('cuda:0') 
+#     torch.cuda.empty_cache()
+#     print("Device set to : " + str(torch.cuda.get_device_name(device)))
+# else:
+#     print("Device set to : cpu")
+# print("============================================================================================")
 
 class PPO:
     def __init__(self, env_space, act_space, gamma, param, to_hallucinate=False) -> None:
