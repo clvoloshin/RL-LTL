@@ -3,3 +3,8 @@ torch
 matplotlib
 gym
 pyyaml
+flloat
+pandas
+tqdm
+scipy
+seaborn
