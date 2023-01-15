@@ -73,28 +73,36 @@ class Trajectory:
         
 
 class RolloutBuffer:
-    def __init__(self, state_shp, action_shp, max_ = 1000) -> None:
+    def __init__(self, state_shp, action_shp, max_ = 1000, to_hallucinate=False) -> None:
         self.trajectories = []
         self.all_reward_trajectories = []
         self.first_action_was_epsilon = False
         self.action_placeholder = np.zeros(action_shp)
         self.max_ = max_
+        self.to_hallucinate = to_hallucinate
+        self.main_trajectory = None
     
     def add_experience(self, env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs):
-        # if self.first_action_was_epsilon and (self.trajectories[0].counter == 1): # first action taken was epsilon
-        #     self.update_trajectories(env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs)
-        #     self.make_trajectories(env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs)
-        # elif len(self.trajectories) == 0:
-        #     self.make_trajectories(env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs)
-        # else:
-        self.update_trajectories(env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs)
-        self.make_trajectories(env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs)
-    
+        
+        if self.to_hallucinate:
+            self.update_trajectories(env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs)
+            self.make_trajectories(env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs)
+        else:
+            if len(self.trajectories) == 0: 
+                traj = Trajectory(self.action_placeholder)
+                self.trajectories.append(traj)
+            
+            traj = self.trajectories[-1]
+            traj.add(s, b, a, r, s_, b_, is_eps, act_idx, logprobs[b][act_idx])
+
+        
     def make_trajectories(self, env, s, b, a, r, s_, b_, act_idx, is_eps, logprobs):
         if not is_eps:
             assert act_idx == 0
             current_terminal_buchis = set([traj.get_last_buchi() for traj in self.trajectories if not traj.done])
             for buchi_state in range(env.observation_space['buchi'].n):
+                if (self.main_trajectory is None) and (buchi_state == b): 
+                    self.main_trajectory = len(self.trajectories)
                 if buchi_state in current_terminal_buchis: continue
                 traj = Trajectory(self.action_placeholder)
                 next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
@@ -150,9 +158,9 @@ class RolloutBuffer:
                 next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
                 traj.add(s, buchi_state, a, accepting_rejecting_neutal, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
         else:
-            # only update first (main), non-hallucinated, trajectory.
+            # only update main, non-hallucinated, trajectory.
             if len(self.trajectories) == 0: return
-            traj = self.trajectories[0]
+            traj = self.trajectories[self.main_trajectory]
             buchi_state = traj.get_last_buchi()
             next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
             traj.add(s, buchi_state, a, accepting_rejecting_neutal, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
@@ -246,7 +254,11 @@ class ActorCritic(nn.Module):
                             nn.ReLU(),
                         )
             
-            self.main_head = nn.Linear(64, state_dim['buchi'].n * self.action_dim)
+            self.main_head = nn.Sequential(
+                            nn.Linear(64, state_dim['buchi'].n * self.action_dim),
+                            nn.Tanh()
+
+                        )
             self.action_switch = nn.Linear(64, state_dim['buchi'].n * action_dim['total']) # for buchi epsilons
 
             with torch.no_grad():
@@ -334,6 +346,10 @@ class ActorCritic(nn.Module):
                 cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
                 dist = MultivariateNormal(action_mean, cov_mat)
                 action = dist.sample()
+
+                clipped_action = torch.clip(action, -1, 1)
+                action = clipped_action
+
                 action_logprob = dist.log_prob(action) + action_or_eps.log_prob(act_or_eps)
             else:
                 is_eps = True

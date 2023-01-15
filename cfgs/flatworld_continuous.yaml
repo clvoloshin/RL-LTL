@@ -1,32 +1,49 @@
 env:
   file: <class 'envs.flatworld.flatworld_continuous'>
+classes:
+  discrete: <class 'envs.flatworld.flatworld'>
+  continuous: <class 'envs.flatworld.flatworld_continuous'>
 logger:
-  dir_name: FlatWorld
+  dir_name: flatworld_loop
 ltl:
   autobuild: False
   formula: "G F (y & X F r) & G!b"
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
-  action_std: 2.5                   # starting std for action distribution (Multivariate Normal)
+  action_std: 1.8                   # starting std for action distribution (Multivariate Normal)
   temp_decay_type: 'exponential'
-  temp_decay_rate: 0.98       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
-  min_action_temp: 0.05             # minimum action_std (stop decay after action_std <= min_action_std)
+  temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
+  min_action_temp: 0.1             # minimum action_std (stop decay after action_std <= min_action_std)
   temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
-  K_epochs: 10               # update policy for K epochs in one PPO update
+  K_epochs: 5               # update policy for K epochs in one PPO update
+  batch_size: 128               # update policy for K epochs in one PPO update
   eps_clip: 0.4          # clip parameter for PPO
-  lr_actor: 0.0003       # learning rate for actor network
+  lr_actor: 0.001       # learning rate for actor network
   lr_critic: 0.01       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
+  n_traj: 2000
+  T: 50
+q_learning:
+  batches_per_update: 5
+  batch_size: 128
+  update_freq__n_episodes: 1
+  init_temp: .8
+  temp_decay_freq__n_episodes: 100
+  temp_decay_rate: .9
+  temp_decay_type: 'exponential'
+  min_action_temp: .15
+  lr: .001
+  iterations_per_target_update: 15
+  n_traj: 2000
+  T: 50
 testing:
-  testing_freq__n_episodes: 1
+  testing_freq__n_episodes: 25
   num_rollouts: 1
 gamma: .95
 n_grad_updates: 1
-n_traj: 10000
 delta: .1
-n_seeds: 3
+n_seeds: 10
 init_seed: 314
-T: 100
 replay_buffer_size: 5000

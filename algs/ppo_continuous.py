@@ -9,6 +9,7 @@ from utls.plotutils import plot_something_live
 import numpy as np
 from policies.actor_critic import RolloutBuffer, ActorCritic
 import time
+from tqdm import tqdm
 
 ################################## set device ##################################
 print("============================================================================================")
@@ -22,13 +23,13 @@ else:
     print("Device set to : cpu")
 print("============================================================================================")
 
-
 class PPO:
-    def __init__(self, env_space, act_space, gamma, param) -> None:
+    def __init__(self, env_space, act_space, gamma, param, to_hallucinate=False) -> None:
 
         lr_actor = param['ppo']['lr_actor']
         lr_critic = param['ppo']['lr_critic']
         self.K_epochs = param['ppo']['K_epochs']
+        self.batch_size = param['ppo']['batch_size']
         self.eps_clip = param['ppo']['eps_clip']
         self.has_continuous_action_space = True
         action_std_init = param['ppo']['action_std']
@@ -46,7 +47,7 @@ class PPO:
         self.policy_old = ActorCritic(env_space, act_space, action_std_init, param).to(device)
         self.policy_old.load_state_dict(self.policy.state_dict())
 
-        self.buffer = RolloutBuffer(env_space['mdp'].shape, act_space['mdp'].shape, param['replay_buffer_size'])
+        self.buffer = RolloutBuffer(env_space['mdp'].shape, act_space['mdp'].shape, param['replay_buffer_size'], to_hallucinate)
         
         self.gamma = gamma
         self.num_updates_called = 0
@@ -91,7 +92,7 @@ class PPO:
         for k in range(self.K_epochs):
 
             # Get data from random reward-ful trajectories
-            old_states, old_buchis, old_actions, rewards, old_action_idxs, old_logprobs = self.buffer.get_torch_data(self.gamma)
+            old_states, old_buchis, old_actions, rewards, old_action_idxs, old_logprobs = self.buffer.get_torch_data(self.gamma, self.batch_size)
             if len(old_states) == 0:
                 # No signal available
                 self.buffer.clear()
@@ -141,7 +142,10 @@ class PPO:
     
 
 def rollout(env, agent, param, i_episode, testing=False, visualize=False):
+    states, buchis = [], []
     state, _ = env.reset()
+    states.append(state['mdp'])
+    buchis.append(state['buchi'])
     ep_reward = 0
     disc_ep_reward = 0
     if not testing: agent.buffer.restart_traj()
@@ -151,10 +155,13 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
         print(0, state['mdp'], state['buchi'])
         # print(agent.Q(s, b))
     
-    for t in range(1, param['T']):  # Don't infinite loop while learning
+    # total_action_time = 0
+    # total_experience_time = 0
+    
+    for t in range(1, param['ppo']['T']):  # Don't infinite loop while learning
         # tic = time.time()
         action, action_idx, is_eps, log_prob, all_logprobs = agent.select_action(state, testing)
-        # print('Get Action', time.time() - tic)
+        # total_action_time += time.time() - tic 
 
         if is_eps:
             action = int(action)
@@ -171,41 +178,50 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
 
         # tic = time.time()
         agent.buffer.add_experience(env, state['mdp'], state['buchi'], action, info['is_accepting'], next_state['mdp'], next_state['buchi'], action_idx, is_eps, all_logprobs)
-        # print('Get Experience', time.time() - tic)
+        # total_experience_time += time.time() - tic
 
-        if visualize:
-            env.render()
+        # if visualize:
+        #     env.render(states)
         # agent.buffer.atomics.append(info['signal'])
         ep_reward += reward
         disc_ep_reward += param['gamma']**(t-1) * reward
 
+        states.append(next_state['mdp'])
+        buchis.append(next_state['buchi'])
         if done:
             break
         state = next_state
 
+    if visualize:
+        env.render(states=states, save_dir=logger.get_dir() + "_episode_" + str(i_episode))
+
+    # print('Get Experience', total_experience_time)
+    # print('Get Action', total_action_time)
     return ep_reward, disc_ep_reward, t
         
-def run_ppo_continuous(param, env, second_order = False):
+def run_ppo_continuous(param, env, second_order = False, to_hallucinate=False):
     
-    agent = PPO(env.observation_space, env.action_space, param['gamma'], param)
+    agent = PPO(env.observation_space, env.action_space, param['gamma'], param, to_hallucinate)
     fig, axes = plt.subplots(2, 1)
     history = []
     success_history = []
-    running_reward = 10
+    disc_success_history = []
     fixed_state, _ = env.reset()
 
-    for i_episode in range(param['n_traj']):
+    for i_episode in tqdm(range(param['ppo']['n_traj'])):
         # TRAINING
 
         # Get trajectory
         # tic = time.time()
         ep_reward, disc_ep_reward, t = rollout(env, agent, param, i_episode, testing=False)
         # toc = time.time() - tic
+        # print('Rollout Time', toc)
 
         # update weights
         # tic = time.time()
         agent.update()
         # toc2 = time.time() - tic
+        # print(toc, toc2)
         
         if i_episode % param['ppo']['temp_decay_freq__n_episodes'] == 0:
             agent.decay_temp(param['ppo']['temp_decay_rate'], param['ppo']['min_action_temp'], param['ppo']['temp_decay_type'])
@@ -213,7 +229,7 @@ def run_ppo_continuous(param, env, second_order = False):
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                test_data.append(rollout(env, agent, param, test_iter, testing=True, visualize= ((i_episode % 10) == 0) & (test_iter == 0) ))
+                test_data.append(rollout(env, agent, param, i_episode, testing=True, visualize= test_iter == 0 )) #param['n_traj']-100) ))
             test_data = np.array(test_data)
     
         if i_episode % 1 == 0:
@@ -221,20 +237,20 @@ def run_ppo_continuous(param, env, second_order = False):
             history += [disc_ep_reward]
             # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
             success_history += [test_data[:, 0].mean()]
-            method = 'TR' if second_order else 'Adam'
+            disc_success_history += [test_data[:, 1].mean()]
+            method = 'Ours' if to_hallucinate else 'Baseline'
             plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
             logger.logkv('Iteration', i_episode)
             logger.logkv('Method', method)
             logger.logkv('Success', success_history[-1])
             logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
+            logger.logkv('DiscSuccess', disc_success_history[-1])
+            logger.logkv('Last20DiscSuccess', np.mean(np.array(disc_success_history[-20:])))
             logger.logkv('EpisodeReward', ep_reward)
             logger.logkv('DiscEpisodeReward', disc_ep_reward)
             logger.logkv('TimestepsAlive', avg_timesteps)
-            logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['T'])
+            logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['ppo']['T'])
             logger.logkv('ActionTemp', agent.temp)
-            # logger.logkv('DataCollectTime', toc)
-            # logger.logkv('UpdateTime', toc2)
-            
             logger.dumpkvs()
             
     plt.close()

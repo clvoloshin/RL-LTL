@@ -8,23 +8,25 @@ import gym.spaces as spaces
 
 import matplotlib
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from utls.plotutils import plotlive
 fontsize = 24
 matplotlib.rc('xtick', labelsize=fontsize) 
 matplotlib.rc('ytick', labelsize=fontsize) 
 
-# figure settings
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Helvetica"]})
-# for Palatino and other serif fonts use:
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.serif": ["Palatino"],
-})
+# # figure settings
+# plt.rcParams.update({
+#     "text.usetex": True,
+#     "font.family": "sans-serif",
+#     "font.sans-serif": ["Helvetica"]})
+# # for Palatino and other serif fonts use:
+# plt.rcParams.update({
+#     "text.usetex": True,
+#     "font.family": "serif",
+#     "font.serif": ["Palatino"],
+# })
+sns.set_theme()
 
 class FlatWorld(gym.Env):
     
@@ -109,13 +111,13 @@ class FlatWorld(gym.Env):
 
         if not self.continuous_actions:
             if action == 0:
-                u = np.array([[0, 1]])
+                u = np.array([[0, .5]])
             elif action == 1:
-                u = np.array([[1, 0]])
+                u = np.array([[.5, 0]])
             elif action == 2:
-                u = np.array([[0, -1]])
+                u = np.array([[0, -.5]])
             elif action == 3:
-                u = np.array([[-1, 0]])
+                u = np.array([[-.5, 0]])
             elif action == 4:
                 u = np.array([[0, 0]])
             else:
@@ -123,12 +125,13 @@ class FlatWorld(gym.Env):
         else:
             u = action
         
-        Δt = 0.1
+        Δt = .4
         A = np.eye(2)
         B = np.eye(2) * Δt
-        action = np.clip(action, -1, +1).astype(np.float32)
+        # action = np.clip(u, -1, +1).astype(np.float32)
+        action = u
 
-        self.state = A @ self.state.reshape(2, 1) + B @ u.reshape(2, 1)
+        self.state = A @ self.state.reshape(2, 1) + B @ action.reshape(2, 1)
         self.state = self.state.reshape(-1)
         cost = np.linalg.norm(action)
         terminated = False
@@ -136,7 +139,7 @@ class FlatWorld(gym.Env):
         return self.state, cost, terminated, {}
 
     @plotlive
-    def render(self):
+    def render(self, states = [], save_dir=None):
         if self.render_mode is None:
             gym.logger.warn(
                 "You are calling render method without specifying any render mode. "
@@ -147,8 +150,21 @@ class FlatWorld(gym.Env):
 
         # plot the environment given the obstacles
         # plt.figure(figsize=(10,10))
-        for obs, color in self.circles:
-            self.ax.plot([obs[0] + obs[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [obs[1] + obs[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)], c=color, linewidth=2)
+        for obs, color in self.circles:           
+            # theta = np.linspace( 0 , 2 * np.pi , 150 )
+ 
+            # radius = obs[2]
+            
+            # x = radius * np.cos( theta ) + obs[0]
+            # y = radius * np.sin( theta ) + obs[1]
+ 
+            # # x, y = [obs[0] + obs[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [obs[1] + obs[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)]
+            # self.ax.plot(x, y, c=color, linewidth=2)
+
+            patch = plt.Circle((obs[0], obs[1]), obs[2], color=color, fill=True, alpha=.2)
+            # # x, y = [obs[0] + obs[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [obs[1] + obs[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)]
+            # # self.ax.plot(x, y, c=color, linewidth=2)
+            self.ax.add_patch(patch)
         
         # for obs, color in [(self.goal, 'orange')]:
         #     self.ax.plot([obs[0] + obs[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [obs[1] + obs[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)], c=color, linewidth=2)
@@ -158,10 +174,21 @@ class FlatWorld(gym.Env):
         # plt.plot([self.obs_4[0], self.obs_4[0], self.obs_4[1], self.obs_4[1], self.obs_4[0]], [self.obs_4[2], self.obs_4[3], self.obs_4[3], self.obs_4[2], self.obs_4[2]], c="orange", linewidth=5)
         # plt.plot([self.obs_3[0] + self.obs_3[2]*np.cos(t) for t in np.arange(0,3*np.pi,0.1)], [self.obs_3[1] + self.obs_3[2]*np.sin(t) for t in np.arange(0,3*np.pi,0.1)], c="blue", linewidth=5)
 
-        self.ax.scatter([self.state[0]], [self.state[1]], s=100, marker='x', c="k")
+        # for state in states:
+        #     self.ax.scatter([state[0]], [state[1]], s=100, marker='-', c="g")
+        self.ax.plot(np.array(states)[:, 0], np.array(states)[:, 1], color='green', marker='o', linestyle='dashed',
+            linewidth=2, markersize=4)
+
+        self.ax.scatter([self.state[0]], [self.state[1]], s=100, marker='o', c="g")
+
+
         # self.ax.scatter([self.goal[0]], [self.goal[1]], s=20, marker='*', c="orange")
-        self.ax.set_xlim([-3, 3])
-        self.ax.set_ylim([-3, 3])
-        # self.ax.axis('equal')
+        self.ax.axis('square')
+        self.ax.set_xlim([-2, 2])
+        self.ax.set_ylim([-2, 2])
+
+        if save_dir is not None:
+            self.fig.savefig(save_dir)
+        
         # self.ax.grid()
         # plt.show(block=False)

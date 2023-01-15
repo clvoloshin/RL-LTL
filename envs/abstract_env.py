@@ -68,7 +68,7 @@ class Simulator(gym.Env):
             'mdp': self.mdp.action_space,
         }
         spaces.update({key: gym.spaces.Discrete(len(val)) for key, val in self.automaton.automaton.eps.items()})
-        self.action_space = gym.spaces.Dict(spaces)
+        self.action_space = dict(spaces)
         
         try:
             self.action_space['total'] = sum([val.n for key, val in self.action_space.items()])
@@ -198,8 +198,8 @@ class Simulator(gym.Env):
         # one_hot[automaton_state] = 1.
         # return np.hstack([state, one_hot]), cost, done, info
     
-    def render(self):
-        self.mdp.render()
+    def render(self, *args, **kw):
+        self.mdp.render(*args, **kw)
     
     def plot(self, *args, **kwargs):
         try:
