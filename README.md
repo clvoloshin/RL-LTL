@@ -20,11 +20,10 @@ Install via:
 dir=$PWD
 mkdir $dir/ltl-env/spot
 cd spot-2.10.4
-./configure --prefix $PWD
+./configure --prefix $dir
 make -j8
 make install -j8
-cp -r $dir/ltl-env/spot/lib/python3.8/site-packages/ $dir/ltl-env/lib/python3.8/site-packages/
-cp $dir/spot-2.10.4/python/*buddy* $dir/ltl-env/lib/python3.8/site-packages/
+cp -r $dir/lib/python3.10/site-packages/* $dir/ltl-env/lib/python3.10/site-packages/
 rm spot-2.10.4.tar.gz 
 ```
 
