@@ -8,3 +8,7 @@ pandas
 tqdm
 scipy
 seaborn
+pygame
+networkx
+dotmap
+shapely

@@ -15,13 +15,14 @@ from tqdm import tqdm
 # print("============================================================================================")
 # set device to cpu or cuda
 device = torch.device('cpu')
-# if(torch.cuda.is_available()): 
-#     device = torch.device('cuda:0') 
-#     torch.cuda.empty_cache()
-#     print("Device set to : " + str(torch.cuda.get_device_name(device)))
-# else:
-#     print("Device set to : cpu")
-# print("============================================================================================")
+if(torch.cuda.is_available()): 
+    device = torch.device('cuda:0') 
+    torch.cuda.empty_cache()
+    print("Device set to : " + str(torch.cuda.get_device_name(device)))
+else:
+    print("Device set to : cpu")
+print("============================================================================================")
+# torch.default_device(device)
 
 class PPO:
     def __init__(self, env_space, act_space, gamma, param, to_hallucinate=False) -> None:
@@ -166,14 +167,20 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
         if is_eps:
             action = int(action)
         else:
-            action = action.numpy().flatten()
+            action = action.cpu().numpy().flatten()
         
-        next_state, cost, done, info = env.step(action, is_eps)
+        try:
+            next_state, cost, done, info = env.step(action, is_eps)
+        except:
+            next_state, cost, done, _, info = env.step(action, is_eps)
         reward = int(info['is_accepting'])
         if testing & visualize:
             s = torch.tensor(next_state['mdp']).type(torch.float)
             b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
-            print(t, next_state['mdp'], next_state['buchi'], action)
+            print(next_state['mdp'])
+            print(next_state['buchi'])
+            print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:4])
+            print(action)
             # print(agent.Q(s, b))
 
         # tic = time.time()
@@ -193,10 +200,17 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
         state = next_state
 
     if visualize:
-        env.render(states=states, save_dir=logger.get_dir() + "_episode_" + str(i_episode))
+        try:
+            env.render(states=states, save_dir=logger.get_dir() + "_episode_" + str(i_episode))
+        except:
+            pass
 
     # print('Get Experience', total_experience_time)
     # print('Get Action', total_action_time)
+    print(next_state['mdp'])
+    print(next_state['buchi'])
+    print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
+    print(action)
     return ep_reward, disc_ep_reward, t
         
 def run_ppo_continuous(param, env, second_order = False, to_hallucinate=False):

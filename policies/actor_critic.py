@@ -9,9 +9,6 @@ from copy import copy, deepcopy
 import time
 torch.autograd.set_detect_anomaly(True)
 
-################################## set device ##################################
-print("============================================================================================")
-# set device to cpu or cuda
 device = torch.device('cpu')
 if(torch.cuda.is_available()): 
     device = torch.device('cuda:0') 
@@ -20,7 +17,7 @@ if(torch.cuda.is_available()):
 else:
     print("Device set to : cpu")
 print("============================================================================================")
-################################## PPO Policy ##################################
+# torch.default_device(device)
 
 class Trajectory:
     def __init__(self, action_placeholder) -> None:
@@ -214,7 +211,7 @@ class RolloutBuffer:
         all_buchis = torch.squeeze(torch.tensor(np.array(all_buchis))).detach().to(device).type(torch.int64).unsqueeze(1).unsqueeze(1)
         all_action_idxs = torch.squeeze(torch.tensor(np.array(all_action_idxs))).detach().to(device).type(torch.int64)
         all_actions = torch.squeeze(torch.tensor(np.array(all_actions))).detach().to(device)
-        all_logprobs = torch.squeeze(torch.tensor(np.array(all_logprobs))).detach().to(device)
+        all_logprobs = torch.squeeze(torch.tensor(all_logprobs)).detach().to(device)
         all_rewards = torch.tensor(np.array(all_rewards), dtype=torch.float32).to(device)
         # all_rewards = (all_rewards - all_rewards.mean()) / (all_rewards.std() + 1e-7)
 
@@ -249,9 +246,9 @@ class ActorCritic(nn.Module):
         if has_continuous_action_space :
             self.actor = nn.Sequential(
                             nn.Linear(state_dim['mdp'].shape[0], 64),
-                            nn.ReLU(),
+                            nn.Tanh(), #relu for other experiments
                             nn.Linear(64, 64),
-                            nn.ReLU(),
+                            nn.Tanh(),
                         )
             
             self.main_head = nn.Sequential(
@@ -264,6 +261,9 @@ class ActorCritic(nn.Module):
             with torch.no_grad():
                 # bias towards no epsilons in the beginning
                 self.action_switch.bias[::action_dim['total']] = 5.
+
+                # bias towards throttle
+                self.main_head[0].bias[::self.action_dim] = .5
                                         
 
             self.main_shp = (state_dim['buchi'].n, self.action_dim)
@@ -365,10 +365,11 @@ class ActorCritic(nn.Module):
         return action.detach(), int(act_or_eps.detach()), is_eps, action_logprob.detach(), torch.log(probs).detach()
     
     def masked_softmax(self, vec, mask, dim=1, tol=1e-7):
-        masked_vec = vec * mask.float()
+        float_mask = mask.float().to(device)
+        masked_vec = vec * float_mask
         max_vec = torch.max(masked_vec, dim=dim, keepdim=True)[0]
         exps = torch.exp(masked_vec-max_vec)
-        masked_exps = exps * mask.float()
+        masked_exps = exps * float_mask
         masked_exps += tol # make sure you dont get -inf when log
         masked_sums = masked_exps.sum(dim, keepdim=True)
         zeros=(masked_sums == 0)
@@ -385,7 +386,7 @@ class ActorCritic(nn.Module):
 
             action_switch_head_all = torch.reshape(self.action_switch(body), (-1,) + self.shp)
             action_switch = torch.take_along_dim(action_switch_head_all, buchi, dim=1)
-            mask = torch.take_along_dim(self.mask.unsqueeze(0).repeat(len(action), 1, 1), buchi, dim=1)
+            mask = torch.take_along_dim(self.mask.unsqueeze(0).repeat(len(action), 1, 1).to(device), buchi, dim=1)
 
             ### Bias against epsilon actions by multiplication by +10
             # action_switch[..., 0] *= torch.sign(action_switch[..., 0]) * 100

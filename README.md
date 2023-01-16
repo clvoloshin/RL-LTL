@@ -37,3 +37,10 @@ Note: Must have java >8 installed as well to run Rabinizer.
 ```
 python3 run.py flatworld_continuous.yaml --restart
 ```
+
+```
+export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI
+export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI/carla/
+export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI/carla/dist/carla-0.9.13-py3.7-linux-x86_64.egg
+export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI/agents
+```

@@ -195,41 +195,42 @@ def discounted_sum(rewards, discount):
     y = signal.lfilter(b, a, x=r)
     return y[::-1]
 
-class NaivePrioritizedBuffer(ReplayBuffer):
-    def __init__(self, size, prob_alpha=0.6):
-        super().__init__(size)
-        self.prob_alpha = prob_alpha
-        self.priorities = np.zeros((size,), dtype=np.float32)
+# class NaivePrioritizedBuffer(ReplayBuffer):
+#     def __init__(self, size, prob_alpha=0.6):
+#         super().__init__(size)
+#         self.prob_alpha = prob_alpha
+#         self.priorities = np.zeros((size,), dtype=np.float32)
     
-    def add(self, state, action, prob, value):
+#     def add(self, state, action, prob, value):
         
-        max_prio = self.priorities.max() if len(self._storage) > 0 else 1.0
-        self.priorities[self._next_idx] = max_prio
-        return super().add(state, action, prob, value)
+#         max_prio = self.priorities.max() if len(self._storage) > 0 else 1.0
+#         self.priorities[self._next_idx] = max_prio
+#         return super().add(state, action, prob, value)
     
-    def sample(self, batch_size, beta=0.4):
-        prios = self.priorities[:len(self._storage)]
+#     def sample(self, batch_size, beta=0.4):
+#         prios = self.priorities[:len(self._storage)]
         
-        probs  = prios ** self.prob_alpha
-        probs /= probs.sum()
+#         probs  = prios ** self.prob_alpha
+#         probs /= probs.sum()
         
-        idxes = np.random.choice(len(self._storage), batch_size, p=probs)
+#         idxes = np.random.choice(len(self._storage), batch_size, p=probs)
         
-        total    = len(self._storage)
-        weights  = (total * probs[idxes]) ** (-beta)
-        weights /= weights.max()
-        weights  = np.array(weights, dtype=np.float32)
+#         total    = len(self._storage)
+#         weights  = (total * probs[idxes]) ** (-beta)
+#         weights /= weights.max()
+#         weights  = np.array(weights, dtype=np.float32)
         
-        return *self._encode_sample(idxes), idxes, weights
+#         import pdb; pdb.set_trace()
+#         return *self._encode_sample(idxes), idxes, weights
         
-        return states, actions, rewards, next_states, dones, indices, weights
+#         return states, actions, rewards, next_states, dones, indices, weights
     
-    def update_priorities(self, batch_indices, batch_priorities):
-        for idx, prio in zip(batch_indices, batch_priorities):
-            self.priorities[idx] = prio
+#     def update_priorities(self, batch_indices, batch_priorities):
+#         for idx, prio in zip(batch_indices, batch_priorities):
+#             self.priorities[idx] = prio
 
-    def __len__(self):
-        return len(self.buffer)
+#     def __len__(self):
+#         return len(self.buffer)
 
 
 def constrain(x, a, b):

@@ -172,10 +172,13 @@ class Simulator(gym.Env):
             # next_state = self.states.setdefault((state, automaton_state), len(self.states))
             # self.map.setdefault(self.states[(state, automaton_state)], (state, automaton_state))
         else:
-            state, cost, done, dic = self.mdp.step(action)
+            output = self.mdp.step(action)
+            try:
+                state, cost, done, _, info = output 
+            except:
+                state, cost, done, info = output
             label, _ = self.mdp.label(state)
             automaton_state = self.automaton.step(label)
-        
         
         info = {'prev_mdp_state': current_mdp_state, 'prev_aut_state': current_aut_state , 's_': state, 'aut_state': automaton_state, 'label': label, 'is_accepting': automaton_state in self.automaton.automaton.accepting_states}
 

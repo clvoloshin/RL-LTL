@@ -202,10 +202,9 @@ class Automaton(object):
         if not autobuild:
             return formula
         
-        
         parsed_formula = ""
         for subformula in formula:
-            operator, low_, high_, template, base_final, base_initial = subformula.replace(' ','').split(',')
+            operator, low_, high_, template, base_final, base_initial = subformula#.replace(' ','').split(',')
             if operator == '': 
                 parsed_formula += '&' + template
             elif base_initial != '':
