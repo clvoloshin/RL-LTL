@@ -1,7 +1,6 @@
 from .agents import Car, Pedestrian, RectangleBuilding
 from .entities import Entity
 from typing import Union
-from .visualizer import Visualizer
 
 class World:
     def __init__(self, dt: float, width: float, height: float, ppm: float = 8):
@@ -9,7 +8,13 @@ class World:
         self.static_agents = []
         self.t = 0 # simulation time
         self.dt = dt # simulation time step
-        self.visualizer = Visualizer(width, height, ppm=ppm)
+
+        try:
+            from .visualizer import Visualizer
+            self.visualizer = Visualizer(width, height, ppm=ppm)
+            self.headless = False
+        except:
+            self.headless = True
         
     def add(self, entity: Entity):
         if entity.movable:
@@ -23,8 +28,18 @@ class World:
         self.t += self.dt
     
     def render(self):
-        self.visualizer.create_window(bg_color = 'gray')
-        self.visualizer.update_agents(self.agents)
+        try:
+            self.visualizer.create_window(bg_color = 'gray')
+            self.visualizer.update_agents(self.agents)
+        except:
+            pass
+    
+    def remove_agents(self):
+        try:
+            self.visualizer.remove_agents(self.agents)
+        except:
+            pass
+
         
     @property
     def agents(self):
@@ -50,10 +65,10 @@ class World:
                 return True
         return False
     
-    def close(self, delete_agents=True):
+    def close(self):
         self.reset()
-        if delete_agents: self.static_agents = []
-        if self.visualizer.window_created:
+        self.static_agents = []
+        if not self.headless and self.visualizer.window_created:
             self.visualizer.close()
         
     def reset(self):

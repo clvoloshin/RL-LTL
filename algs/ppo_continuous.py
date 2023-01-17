@@ -204,7 +204,7 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
 
     if visualize:
         try:
-            env.render(states=env.unnormalize(states), save_dir=logger.get_dir() + "_episode_" + str(i_episode))
+            env.render(states=env.unnormalize(states), save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
         except:
             pass
 

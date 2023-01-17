@@ -3,7 +3,7 @@ from .world import World
 from .agents import Car, RingBuilding, CircleBuilding, Painting, Pedestrian
 from .geometry import Point, Line
 import time
-from tkinter import *
+# from tkinter import *
 import gym
 import gym.spaces as spaces
 
@@ -74,8 +74,6 @@ class CarloEnv:
         
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=self.get_state().shape, dtype='float32')
 
-
-
     def reset(self):
         try:
             self.world.visualizer.close()
@@ -139,25 +137,31 @@ class CarloEnv:
         new_state = state * np.array([self.world_width, self.world_height, self.agent.max_speed, self.agent.max_speed, 2*np.pi]) 
         return np.array([np.linalg.norm([new_state[0] - wp.x, new_state[1] - wp.y]) for wp in self.waypoints])
 
-    def render(self, states = [], save_dir=None):
+    def render(self, states = [], save_dir=None, save_states=True):
         
-        self.world.render()
+        if not self.world.headless:
+            self.world.render()
 
-        ppm = self.world.visualizer.ppm
-        dh = self.world.visualizer.display_height
-        if len(states):
-            for (x1,y1), (x2, y2) in zip(np.array(states)[:-1, 0:2], np.array(states)[1:, 0:2]):
-                # self.world.add(Line(Point(x1,y1), Point(x2, y2)))
-                self.world.visualizer.win.plot_line_(ppm*x1, dh - ppm*y1, ppm*x2, dh - ppm*y2, fill='red', width='2')
-            # coords = np.array(states)[0:2]
-            # coords[:, 0] *= ppm
-            # coords[:, 1] = dh - ppm*coords[:, 1]
-            # self.world.visualizer.win.plot_line(coords.T.flatten().tolist(), color='green')
+            ppm = self.world.visualizer.ppm
+            dh = self.world.visualizer.display_height
+            if len(states):
+                for (x1,y1), (x2, y2) in zip(np.array(states)[:-1, 0:2], np.array(states)[1:, 0:2]):
+                    # self.world.add(Line(Point(x1,y1), Point(x2, y2)))
+                    self.world.visualizer.win.plot_line_(ppm*x1, dh - ppm*y1, ppm*x2, dh - ppm*y2, fill='red', width='2')
+                # coords = np.array(states)[0:2]
+                # coords[:, 0] *= ppm
+                # coords[:, 1] = dh - ppm*coords[:, 1]
+                # self.world.visualizer.win.plot_line(coords.T.flatten().tolist(), color='green')
 
-        self.world.render()
+            self.world.render()
 
-        if save_dir is not None:
-            self.world.visualizer.save_fig(save_dir + '.png')
+            if save_dir is not None:
+                self.world.remove_agents()
+                self.world.visualizer.save_fig(save_dir + '.png')
+        
+        if save_states:
+            np.save(save_dir + '.npy', np.array(states))
+            
                 
     def step(self, action):
 

@@ -20,6 +20,12 @@ class Visualizer:
             self.window_created = True
             self.visualized_imgs = []
             
+    def remove_agents(self, agents: list):
+        # Remove the movable agents from the window
+        for imgItem in self.visualized_imgs:
+            if imgItem['movable']:
+                imgItem['graphics'].undraw()
+
     def update_agents(self, agents: list):
         new_visualized_imgs = []
         
