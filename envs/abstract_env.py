@@ -80,6 +80,12 @@ class Simulator(gym.Env):
         self.rejecting_states = set()
         self.inf_often = []
     
+    def unnormalize(self, states):
+        try:
+            return self.mdp.unnormalize(states)
+        except:
+            return states
+    
     def did_succeed(self, x, a, r, x_, d, t):
         return self.mdp.did_succeed(x['mdp'], a, r, x_['mdp'], d, t)
         # return self.mdp.did_succeed(x[:self.mdp.observation_space.shape[0]], a, r, x_[:self.mdp.observation_space.shape[0]], d, t)
@@ -88,7 +94,7 @@ class Simulator(gym.Env):
         raise NotImplemented
         # return self.mdp.label(state[:self.mdp.observation_space.shape[0]])        
             
-    def reset(self):
+    def reset(self, make_aut_init_state_random=True):
         try:
             #allow reset at any point, even if using Monitor
             self.mdp.stats_recorder.done = True
@@ -99,6 +105,8 @@ class Simulator(gym.Env):
         label, _ = self.mdp.label(state)
         
         self.automaton.reset()
+        if make_aut_init_state_random:
+            self.automaton.set_state(np.random.choice(self.automaton.n_states - 1))
         automaton_state = self.automaton.step(label)
 
         return {'mdp': state, 'buchi': automaton_state}, {}
@@ -129,7 +137,8 @@ class Simulator(gym.Env):
             self.automaton.set_state(desired_current_aut_state)
             automaton_state = self.automaton.step(label)
             self.automaton.set_state(current_aut_state)
-            if automaton_state in self.automaton.automaton.accepting_states:
+            # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
+            if (automaton_state in self.automaton.automaton.accepting_states):
                 accepting_rejecting_neutral = 1
             elif automaton_state == (self.automaton.automaton.n_states - 1):
                 accepting_rejecting_neutral = -1
@@ -143,7 +152,8 @@ class Simulator(gym.Env):
             automaton_state = self.automaton.epsilon_step(eps_action)
             automaton_state = self.automaton.step(label) # Do we take this step right now???
             self.automaton.set_state(current_aut_state)
-            if automaton_state in self.automaton.automaton.accepting_states:
+            # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
+            if (automaton_state in self.automaton.automaton.accepting_states):
                 accepting_rejecting_neutral = 1
             elif automaton_state == (self.automaton.automaton.n_states - 1):
                 accepting_rejecting_neutral = -1

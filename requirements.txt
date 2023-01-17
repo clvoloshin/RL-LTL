@@ -12,3 +12,4 @@ pygame
 networkx
 dotmap
 shapely
+pillow

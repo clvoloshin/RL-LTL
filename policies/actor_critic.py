@@ -73,6 +73,7 @@ class RolloutBuffer:
     def __init__(self, state_shp, action_shp, max_ = 1000, to_hallucinate=False) -> None:
         self.trajectories = []
         self.all_reward_trajectories = []
+        self.all_no_reward_trajectories = []
         self.first_action_was_epsilon = False
         self.action_placeholder = np.zeros(action_shp)
         self.max_ = max_
@@ -101,10 +102,12 @@ class RolloutBuffer:
                 if (self.main_trajectory is None) and (buchi_state == b): 
                     self.main_trajectory = len(self.trajectories)
                 if buchi_state in current_terminal_buchis: continue
+                # import pdb; pdb.set_trace()
                 traj = Trajectory(self.action_placeholder)
                 next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
-                traj.add(s, buchi_state, a, accepting_rejecting_neutal, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
-                self.trajectories.append(traj)
+                if accepting_rejecting_neutal < 1: 
+                    traj.add(s, buchi_state, a, accepting_rejecting_neutal, s_, next_buchi_state, is_eps, act_idx, logprobs[buchi_state][act_idx])
+                    self.trajectories.append(traj)
             
                 # also add epsilon transition 
                 try:                        
@@ -189,23 +192,26 @@ class RolloutBuffer:
         all_rewards = []
         all_action_idxs = []
         all_logprobs = []
-        try:
-            idxs = np.random.randint(0, len(self.all_reward_trajectories),size=N)
-        except:
-            idxs = [] # len(self.all_reward_traj) == 0
-        for idx in idxs:
-            traj = self.all_reward_trajectories[idx]
-            rewards = []
-            discounted_reward = 0
-            for reward in reversed(traj.rewards):
-                discounted_reward = reward + (gamma * discounted_reward)
-                rewards.insert(0, discounted_reward)
-            all_rewards += rewards # extend list
-            all_states += traj.states
-            all_actions += traj.actions
-            all_action_idxs += traj.act_idxs
-            all_logprobs += traj.logprobs
-            all_buchis += traj.buchis
+        # all_dones = []
+        for X in [self.all_reward_trajectories, self.all_no_reward_trajectories]:
+            try:
+                idxs = np.random.randint(0, len(X),size=N)
+            except:
+                idxs = [] # len(self.all_reward_traj) == 0
+            for idx in idxs:
+                traj = X[idx]
+                rewards = []
+                discounted_reward = 0
+                for reward in reversed(traj.rewards):
+                    discounted_reward = reward + (gamma * discounted_reward)
+                    rewards.insert(0, discounted_reward)
+                all_rewards += rewards # extend list
+                all_states += traj.states
+                all_actions += traj.actions
+                all_action_idxs += traj.act_idxs
+                all_logprobs += traj.logprobs
+                all_buchis += traj.buchis
+                # all_dones += traj.dones
         
         all_states = torch.squeeze(torch.tensor(np.array(all_states))).detach().to(device).type(torch.float)
         all_buchis = torch.squeeze(torch.tensor(np.array(all_buchis))).detach().to(device).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -213,9 +219,10 @@ class RolloutBuffer:
         all_actions = torch.squeeze(torch.tensor(np.array(all_actions))).detach().to(device)
         all_logprobs = torch.squeeze(torch.tensor(all_logprobs)).detach().to(device)
         all_rewards = torch.tensor(np.array(all_rewards), dtype=torch.float32).to(device)
+        # all_dones = torch.tensor(np.array(all_dones), dtype=torch.float32).to(device)
         # all_rewards = (all_rewards - all_rewards.mean()) / (all_rewards.std() + 1e-7)
 
-        return all_states, all_buchis, all_actions, all_rewards, all_action_idxs, all_logprobs
+        return all_states, all_buchis, all_actions, all_rewards, all_action_idxs, all_logprobs#, all_dones
 
     def get_states(self):
         all_states = []
@@ -228,8 +235,10 @@ class RolloutBuffer:
 
     def clear(self):
         self.all_reward_trajectories += [traj for traj in self.trajectories if traj.has_reward]
+        self.all_no_reward_trajectories += [traj for traj in self.trajectories if not traj.has_reward]
         self.trajectories = []
         self.all_reward_trajectories = self.all_reward_trajectories[-self.max_:]
+        self.all_no_reward_trajectories = self.all_no_reward_trajectories[-self.max_:]
         
 
 class ActorCritic(nn.Module):
@@ -246,15 +255,14 @@ class ActorCritic(nn.Module):
         if has_continuous_action_space :
             self.actor = nn.Sequential(
                             nn.Linear(state_dim['mdp'].shape[0], 64),
-                            nn.Tanh(), #relu for other experiments
+                            nn.ReLU(), #relu for other experiments
                             nn.Linear(64, 64),
-                            nn.Tanh(),
+                            nn.ReLU(),
                         )
             
             self.main_head = nn.Sequential(
                             nn.Linear(64, state_dim['buchi'].n * self.action_dim),
                             nn.Tanh()
-
                         )
             self.action_switch = nn.Linear(64, state_dim['buchi'].n * action_dim['total']) # for buchi epsilons
 
@@ -262,8 +270,8 @@ class ActorCritic(nn.Module):
                 # bias towards no epsilons in the beginning
                 self.action_switch.bias[::action_dim['total']] = 5.
 
-                # bias towards throttle
-                self.main_head[0].bias[::self.action_dim] = .5
+                # bias towards left turn
+                # self.main_head[0].bias[::self.action_dim] = 0
                                         
 
             self.main_shp = (state_dim['buchi'].n, self.action_dim)

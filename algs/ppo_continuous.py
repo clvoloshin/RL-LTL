@@ -150,11 +150,11 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     ep_reward = 0
     disc_ep_reward = 0
     if not testing: agent.buffer.restart_traj()
-    if testing & visualize:
-        s = torch.tensor(state['mdp']).type(torch.float)
-        b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
-        print(0, state['mdp'], state['buchi'])
-        # print(agent.Q(s, b))
+    # if testing & visualize:
+    #     s = torch.tensor(state['mdp']).type(torch.float)
+    #     b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
+    #     print(0, state['mdp'], state['buchi'])
+    #     # print(agent.Q(s, b))
     
     # total_action_time = 0
     # total_experience_time = 0
@@ -179,7 +179,10 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
             b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
             print(next_state['mdp'])
             print(next_state['buchi'])
-            print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:4])
+            try:
+                print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
+            except:
+                pass
             print(action)
             # print(agent.Q(s, b))
 
@@ -188,7 +191,7 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
         # total_experience_time += time.time() - tic
 
         # if visualize:
-        #     env.render(states)
+        #     env.render()
         # agent.buffer.atomics.append(info['signal'])
         ep_reward += reward
         disc_ep_reward += param['gamma']**(t-1) * reward
@@ -201,7 +204,7 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
 
     if visualize:
         try:
-            env.render(states=states, save_dir=logger.get_dir() + "_episode_" + str(i_episode))
+            env.render(states=env.unnormalize(states), save_dir=logger.get_dir() + "_episode_" + str(i_episode))
         except:
             pass
 
@@ -209,7 +212,10 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     # print('Get Action', total_action_time)
     print(next_state['mdp'])
     print(next_state['buchi'])
-    print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
+    try:
+        print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
+    except:
+        pass
     print(action)
     return ep_reward, disc_ep_reward, t
         
