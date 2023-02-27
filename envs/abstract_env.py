@@ -94,7 +94,7 @@ class Simulator(gym.Env):
         raise NotImplemented
         # return self.mdp.label(state[:self.mdp.observation_space.shape[0]])        
             
-    def reset(self, make_aut_init_state_random=True):
+    def reset(self, make_aut_init_state_random=False):
         try:
             #allow reset at any point, even if using Monitor
             self.mdp.stats_recorder.done = True

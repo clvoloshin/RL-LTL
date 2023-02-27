@@ -239,6 +239,8 @@ class SlipperyGrid(MiniGridEnv):
         self.agent_dir = 0
         # print(self.agent_pos[::-1])
         super().render()
+
+
             
 
 

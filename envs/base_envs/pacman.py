@@ -5,6 +5,7 @@ import os
 from copy import deepcopy
 import PIL.Image as Image
 from numpy import uint8
+import numpy as np
 
 OBJECT_TO_IDX.update({'ghost': len(OBJECT_TO_IDX)})
 OBJECT_TO_IDX.update({'coin': len(OBJECT_TO_IDX)})
@@ -19,9 +20,9 @@ class Ghost(WorldObj):
 
     def render(self, img):
 
-        ghost = Image.open(os.path.join(os.getcwd(), 'envs/base_envs/layouts/pacman/ghost.png')).resize([SIZE, SIZE])
+        ghost = Image.open(os.path.join(os.getcwd(), 'envs/base_envs/layouts/pacman/ghost.png')).resize([int(SIZE*1.5), int(1.5*SIZE)])
         im = Image.fromarray(img).convert('RGBA')
-        im.paste(ghost, (50, 50), ghost)
+        im.paste(ghost, (12, 12), ghost)
 
         img[:] = np.array(im.convert('RGB'))
 
@@ -36,7 +37,7 @@ class Coin(WorldObj):
 
         coin = Image.open(os.path.join(os.getcwd(), 'envs/base_envs/layouts/pacman/coin.png')).resize([SIZE, SIZE])
         im = Image.fromarray(img).convert('RGBA')
-        im.paste(coin, (50, 50), coin)
+        im.paste(coin, (25, 25), coin)
 
         img[:] = np.array(im.convert('RGB'))
     
@@ -112,8 +113,28 @@ class Pacman(MiniGridEnv):
         self.current_state = [self.agent_state] + self.ghosts_state
         return self.get_state(), {}
     
-    def render(self):
-        super().render(highlight=False)
+    def render(self, states = [], save_dir=None, mode='human', **kw):
+
+        # rows = []
+        # cols = []
+        # if states:
+        #     dist = np.array([self.index_to_state(x) for x in states])
+        #     cols = dist[...,0].reshape(-1)
+        #     rows = dist[...,1].reshape(-1)
+            
+        #     for row, col in zip(rows, cols):
+        #         self.coins[row, col].toggle_on(self, [row, col])
+
+        super().render(mode, highlight=False, **kw)
+        
+        # for row, col in zip(rows, cols):
+        #     self.coins[row, col].toggle_off(self, [row, col])
+        
+        # if save_dir is not None:
+        #     self.window.fig.savefig(save_dir)
+
+    # def render(self):
+    #     super().render(highlight=False)
 
 
     def _gen_grid(self, width, height):
@@ -239,7 +260,7 @@ class Pacman(MiniGridEnv):
         if ghosts_moving:
             for i in range(len(self.ghosts_state)):
                 # with probability of 40% the ghosts chase the pacman
-                if np.random.uniform() < .4:
+                if np.random.uniform() < .8:
                     
                     start, finish = self.ghosts_state[i], self.agent_state
                     if (start, finish) in self.shortest_paths: 

@@ -2,6 +2,8 @@ env:
   file: <class 'envs.pacman.pacman'>
   J: 100
   c_min: 1
+classes:
+  discrete: <class 'envs.pacman.pacman'>
 lcrl:
   episode_num: 10000
   iteration_num_max: 100
@@ -20,15 +22,19 @@ q_learning:
   batches_per_update: 200
   batch_size: 512
   update_freq__n_episodes: 1
-  init_temp: .2
+  init_temp: .4
   temp_decay_freq__n_episodes: 400
   temp_decay_rate: .05
   min_action_temp: 0.
+  temp_decay_type: 'linear'
+  n_traj: 5000
+  T: 100
+testing:
+  testing_freq__n_episodes: 10
+  num_rollouts: 20
 gamma: .999
 n_grad_updates: 1
-n_traj: 10000
 delta: .1
-n_seeds: 3
+n_seeds: 10
 init_seed: 314
-T: 100
 replay_buffer_size: 50000

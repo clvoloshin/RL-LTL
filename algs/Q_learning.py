@@ -85,7 +85,7 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False, to_hal
         state = next_state
     
     if visualize:
-        env.render(states=states, save_dir=logger.get_dir() + "_episode_" + str(i_episode))
+        env.render(states=states, save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
     return ep_reward, disc_ep_reward, t
         
 def run_Q_learning(param, env, second_order = False, continuous_state=True, to_hallucinate=False):

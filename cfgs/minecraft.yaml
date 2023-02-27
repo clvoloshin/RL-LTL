@@ -2,10 +2,12 @@ env:
   file: <class 'envs.minecraft.minecraft'>
   J: 20
   c_min: 1
+classes:
+  discrete: <class 'envs.minecraft.minecraft'>
 logger:
   dir_name: minecraft
 ltl:
-  formula: F(gold) & G(gold -> X F work_bench) & G(work_bench -> X F gold) & (G !obstacle)
+  formula: GF(gold & XF(work_bench)) & (G !obstacle)
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 q_learning:
@@ -16,11 +18,19 @@ q_learning:
   temp_decay_freq__n_episodes: 25
   temp_decay_rate: .05
   min_action_temp: 0.
+  n_traj: 250
+  T: 100
+  init_temp: .3
+  temp_decay_freq__n_episodes: 100
+  temp_decay_rate: .9
+  temp_decay_type: 'exponential'
+  min_action_temp: 0
+testing:
+  testing_freq__n_episodes: 10
+  num_rollouts: 1
 gamma: .99
 n_grad_updates: 1
-n_traj: 1000
 delta: .1
-n_seeds: 3
+n_seeds: 10
 init_seed: 314
-T: 100
 replay_buffer_size: 50000

@@ -11,8 +11,7 @@ from experiment_tools.factory import setup_params
 
 # from algs.ppo_ltl import run_ppo_ltl
 from algs.Q_learning import run_Q_learning
-from algs.AC_algos import run_AC_learning
-from algs.ppo_continuous import run_ppo_continuous
+from algs.ppo import run_PPO
 import numpy as np
 from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
@@ -26,7 +25,6 @@ def main(seed, param, to_redo):
 
     dir = os.path.join(param['logger']['dir_name'], 'ours_q', 'experiment_%05.f' % (seed) )
     if ('discrete' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
-        logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)
         param['env']['file'] = param['classes']['discrete']
@@ -41,11 +39,11 @@ def main(seed, param, to_redo):
         except:
             pass
         
+        logger.configure(name=dir)
         run_Q_learning(param, sim, False, not is_discrete_obs_space, to_hallucinate=True)
     
     dir = os.path.join(param['logger']['dir_name'], 'baseline_q', 'experiment_%05.f' % (seed) )
     if ('discrete' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
-        logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)
         param['env']['file'] = param['classes']['discrete']
@@ -60,11 +58,11 @@ def main(seed, param, to_redo):
         except:
             pass
         
+        logger.configure(name=dir)
         run_Q_learning(param, sim, False, not is_discrete_obs_space, to_hallucinate=False)
 
     dir = os.path.join(param['logger']['dir_name'], 'ours_ppo', 'experiment_%05.f' % (seed) )
     if ('continuous' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
-        logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)
         param['env']['file'] = param['classes']['continuous']
@@ -76,14 +74,16 @@ def main(seed, param, to_redo):
         try:
             sim.observation_space['mdp'].n
             is_discrete_obs_space = True
+            # PPO for discrete state space: NOT IMPLEMENTED
+            return
         except:
             pass
         
-        run_ppo_continuous(param, sim, False, to_hallucinate=True)
+        logger.configure(name=dir)
+        run_PPO(param, sim, False, not is_discrete_obs_space, to_hallucinate=True)
     
     dir = os.path.join(param['logger']['dir_name'], 'baseline_ppo', 'experiment_%05.f' % (seed) )
     if ('continuous' in param['classes']) and (to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir))):
-        logger.configure(name=dir)
         torch.manual_seed(seed)
         np.random.seed(seed)
         param['env']['file'] = param['classes']['continuous']
@@ -95,10 +95,13 @@ def main(seed, param, to_redo):
         try:
             sim.observation_space['mdp'].n
             is_discrete_obs_space = True
+            # PPO for discrete state space: NOT IMPLEMENTED
+            return
         except:
             pass
         
-        run_ppo_continuous(param, sim, False, to_hallucinate=False)
+        logger.configure(name=dir)
+        run_PPO(param, sim, False, not is_discrete_obs_space, to_hallucinate=False)
     
     # dir = os.path.join(param['logger']['dir_name'], 'baseline_only_init', 'experiment_%05.f' % (seed) )
     # if to_redo or not os.path.exists(os.path.join(os.getcwd(), 'experiments', dir)):
