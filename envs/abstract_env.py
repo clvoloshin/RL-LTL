@@ -225,3 +225,73 @@ class Simulator(gym.Env):
             return self.mdp.test(*args, **kwargs)
         except:
             print('Cannot test Policy')
+
+
+class SimulatorMDP(gym.Env):
+    def __init__(self, mdp):
+        self.mdp = mdp
+        spaces = {
+            'mdp': self.mdp.observation_space,
+            }
+        self.observation_space = spaces #self.mdp.observation_space.shape[0] + self.automaton.n_states
+
+        
+        spaces = {
+            'mdp': self.mdp.action_space,
+        }
+        self.action_space = dict(spaces)
+        
+    def unnormalize(self, states):
+        try:
+            return self.mdp.unnormalize(states)
+        except:
+            return states
+    
+    def did_succeed(self, x, a, r, x_, d, t):
+        return self.mdp.did_succeed(x['mdp'], a, r, x_['mdp'], d, t)
+        # return self.mdp.did_succeed(x[:self.mdp.observation_space.shape[0]], a, r, x_[:self.mdp.observation_space.shape[0]], d, t)
+    
+    def label(self, state):
+        raise NotImplemented
+        # return self.mdp.label(state[:self.mdp.observation_space.shape[0]])        
+            
+    def reset(self):
+        try:
+            #allow reset at any point, even if using Monitor
+            self.mdp.stats_recorder.done = True
+        except:
+            pass
+
+        state, _ = self.mdp.reset()
+        
+        return {'mdp': state}, {}
+
+    
+    # @timeit
+    def step(self, action, is_eps=False):
+        current_mdp_state = self.mdp.get_state()
+
+        output = self.mdp.step(action)
+        try:
+            state, cost, done, _, info = output 
+        except:
+            state, cost, done, info = output
+        
+        info = {'prev_mdp_state': current_mdp_state, 's_': state}
+
+        return {'mdp': state}, cost, done, info
+        
+    def render(self, *args, **kw):
+        self.mdp.render(*args, **kw)
+    
+    def plot(self, *args, **kwargs):
+        try:
+            self.mdp.plot(*args, **kwargs)
+        except:
+            print('Cannot Print Policy')
+    
+    def test(self, *args, **kwargs):
+        try:
+            return self.mdp.test(*args, **kwargs)
+        except:
+            print('Cannot test Policy')
