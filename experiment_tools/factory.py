@@ -1,6 +1,6 @@
 from logger import warn
 import inspect
-import gym
+import gymnasium as gym
 import importlib
 
 

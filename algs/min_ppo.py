@@ -60,7 +60,7 @@ class PPO:
 
     def select_action(self, state, is_testing):
         with torch.no_grad():
-            state_tensor = torch.FloatTensor(state['mdp']).to(device)
+            state_tensor = torch.tensor(state['mdp']).to(device)
             action, action_logprob = self.policy_old.act(state_tensor)
 
             return action, action_logprob
@@ -121,7 +121,7 @@ class PPO:
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
-            loss = policy_grad + 0.5*val_loss #- 0.01*entropy_loss 
+            loss = policy_grad + 0.5*val_loss #- 0.01*entropy_loss
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
@@ -138,7 +138,7 @@ class PPO:
 
         # clear buffer
         self.buffer.clear()
-    
+
 
 def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     states = []
@@ -155,7 +155,7 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     
     # total_action_time = 0
     # total_experience_time = 0
-    
+    lattice_points = [np.zeros((1,4))]
     for t in range(1, param['ppo']['T']):  # Don't infinite loop while learning
         # tic = time.time()
         action, log_prob = agent.select_action(state, testing)
@@ -167,7 +167,8 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
             next_state, cost, done, info = env.step(action)
         except:
             next_state, cost, done, _, info = env.step(action)
-        reward = -cost
+        # TODO: Fix this
+        reward = -cost(lattice_points[0])
         if testing & visualize:
             s = torch.tensor(next_state['mdp']).type(torch.float)
             print(next_state['mdp'])

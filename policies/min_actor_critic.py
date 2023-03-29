@@ -60,7 +60,6 @@ class RolloutBuffer:
         self.main_trajectory = None
     
     def add_experience(self, s, a, r, s_, logprobs):
-        
         if len(self.trajectories) == 0: 
                 traj = Trajectory(self.action_placeholder)
                 self.trajectories.append(traj)
@@ -81,7 +80,7 @@ class RolloutBuffer:
             all_rewards += rewards # extend list
                         
         # Normalizing the rewards
-        rewards = torch.tensor(all_rewards, dtype=torch.float32).to(device)
+        rewards = torch.tensor(all_rewards, dtype=torch.float64).to(device)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
         return rewards
     
@@ -89,37 +88,34 @@ class RolloutBuffer:
         all_states = []
         all_actions = []
         all_rewards = []
-        all_action_idxs = []
         all_logprobs = []
         # all_dones = []
-        for X in [self.all_reward_trajectories, self.all_no_reward_trajectories]:
-            try:
-                idxs = np.random.randint(0, len(X),size=N)
-            except:
-                idxs = [] # len(self.all_reward_traj) == 0
-            for idx in idxs:
-                traj = X[idx]
-                rewards = []
-                discounted_reward = 0
-                for reward in reversed(traj.rewards):
-                    discounted_reward = reward + (gamma * discounted_reward)
-                    rewards.insert(0, discounted_reward)
-                all_rewards += rewards # extend list
-                all_states += traj.states
-                all_actions += traj.actions
-                all_action_idxs += traj.act_idxs
-                all_logprobs += traj.logprobs
-                # all_dones += traj.dones
-        
-        all_states = torch.squeeze(torch.tensor(np.array(all_states))).detach().to(device).type(torch.float)
-        all_action_idxs = torch.squeeze(torch.tensor(np.array(all_action_idxs))).detach().to(device).type(torch.int64)
-        all_actions = torch.squeeze(torch.tensor(np.array(all_actions))).detach().to(device)
-        all_logprobs = torch.squeeze(torch.tensor(all_logprobs)).detach().to(device)
-        all_rewards = torch.tensor(np.array(all_rewards), dtype=torch.float32).to(device)
-        # all_dones = torch.tensor(np.array(all_dones), dtype=torch.float32).to(device)
-        # all_rewards = (all_rewards - all_rewards.mean()) / (all_rewards.std() + 1e-7)
+        # for X in self.trajectories:
+        try:
+            idxs = np.random.choice(len(self.trajectories),
+                                    size=min(N, len(self.trajectories)),
+                                    replace=False)
+        except:
+            idxs = [] # len(self.all_reward_traj) == 0
+        for idx in idxs:
+            traj = self.trajectories[idx]
+            rewards = []
+            discounted_reward = 0
+            for reward in reversed(traj.rewards):
+                discounted_reward = reward + (gamma * discounted_reward)
+                rewards.insert(0, discounted_reward)
+            all_rewards += rewards # extend list
+            all_states += traj.states
+            all_actions += traj.actions
+            all_logprobs += traj.logprobs
+            # all_dones += traj.dones
+        all_states = torch.stack(all_states, dim=0).flatten(0,-2)
+        all_actions = torch.stack(all_actions, dim=0).flatten(0,-2)
+        all_logprobs = torch.stack(all_logprobs, dim=0).flatten()
+        all_rewards = torch.stack(all_rewards, dim=0).flatten()
+        assert all_states.shape[0] == all_actions.shape[0] == all_logprobs.shape[0] == all_rewards.shape[0]
 
-        return all_states, all_actions, all_rewards, all_action_idxs, all_logprobs#, all_dones
+        return all_states, all_actions, all_rewards, all_logprobs#, all_dones
 
     def get_states(self):
         all_states = []
@@ -149,21 +145,33 @@ class ActorCritic(nn.Module):
             self.action_dim = action_dim['mdp'].shape[0]
             self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init).to(device)
 
+        nf = 16
+        linear_act = nn.ReLU()
+        nonlinear_act = nn.Tanh()
         self.actor = nn.Sequential(
-                        nn.Linear(state_dim['mdp'].shape[0], 64),
-                        nn.ReLU(), #relu for other experiments
-                        nn.Linear(64, 64),
-                        nn.ReLU(),
-                        nn.Linear(64, self.action_dim)
+                        nn.Linear(2 * state_dim['mdp'].shape[0], nf),
+                        linear_act, #relu for other experiments
+                        # nn.Linear(nf, nf),
+                        # linear_act,
+                        # nn.Linear(nf, nf),
+                        # linear_act,
+                        # nn.Linear(nf, nf),
+                        # linear_act,
+                        nn.Linear(nf, self.action_dim),
+                        nn.Tanh()
                     )
         
         # critic
         self.critic = nn.Sequential(
-                        nn.Linear(state_dim['mdp'].shape[0], 64),
-                        nn.Tanh(),
-                        nn.Linear(64, 64),
-                        nn.Tanh(),
-                        nn.Linear(64, 1)
+                        nn.Linear(2 * state_dim['mdp'].shape[0], nf),
+                        nonlinear_act, #relu for other experiments
+                        # nn.Linear(nf, nf),
+                        # nonlinear_act,
+                        # nn.Linear(nf, nf),
+                        # nonlinear_act,
+                        nn.Linear(nf, nf),
+                        nonlinear_act,
+                        nn.Linear(nf, 1)
                     )
         
     def set_action_std(self, new_action_std):

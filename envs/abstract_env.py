@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod
-import gym
-import gym.spaces
+from typing import Optional
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 from copy import deepcopy
 import time
@@ -255,23 +256,23 @@ class SimulatorMDP(gym.Env):
         raise NotImplemented
         # return self.mdp.label(state[:self.mdp.observation_space.shape[0]])        
             
-    def reset(self):
+    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None,):
         try:
             #allow reset at any point, even if using Monitor
             self.mdp.stats_recorder.done = True
         except:
             pass
 
-        state, _ = self.mdp.reset()
+        state, _ = self.mdp.reset(options=options, seed=seed)
         
         return {'mdp': state}, {}
 
     
     # @timeit
-    def step(self, action, is_eps=False):
+    def step(self, state, action, is_eps=False):
         current_mdp_state = self.mdp.get_state()
 
-        output = self.mdp.step(action)
+        output = self.mdp.step_fn(state['mdp'], action)
         try:
             state, cost, done, _, info = output 
         except:
@@ -280,7 +281,8 @@ class SimulatorMDP(gym.Env):
         info = {'prev_mdp_state': current_mdp_state, 's_': state}
 
         return {'mdp': state}, cost, done, info
-        
+
+
     def render(self, *args, **kw):
         self.mdp.render(*args, **kw)
     
