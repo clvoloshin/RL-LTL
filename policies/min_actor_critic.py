@@ -143,20 +143,20 @@ class ActorCritic(nn.Module):
         
         if has_continuous_action_space:
             self.action_dim = action_dim['mdp'].shape[0]
-            self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init).to(device)
+            self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init).type(torch.float64).to(device)
 
-        nf = 16
+        nf = 32
         linear_act = nn.ReLU()
         nonlinear_act = nn.Tanh()
         self.actor = nn.Sequential(
                         nn.Linear(2 * state_dim['mdp'].shape[0], nf),
                         linear_act, #relu for other experiments
-                        # nn.Linear(nf, nf),
-                        # linear_act,
-                        # nn.Linear(nf, nf),
-                        # linear_act,
-                        # nn.Linear(nf, nf),
-                        # linear_act,
+                        nn.Linear(nf, nf),
+                        linear_act,
+                        nn.Linear(nf, nf),
+                        linear_act,
+                        nn.Linear(nf, nf),
+                        linear_act,
                         nn.Linear(nf, self.action_dim),
                         nn.Tanh()
                     )
@@ -165,10 +165,10 @@ class ActorCritic(nn.Module):
         self.critic = nn.Sequential(
                         nn.Linear(2 * state_dim['mdp'].shape[0], nf),
                         nonlinear_act, #relu for other experiments
-                        # nn.Linear(nf, nf),
-                        # nonlinear_act,
-                        # nn.Linear(nf, nf),
-                        # nonlinear_act,
+                        nn.Linear(nf, nf),
+                        nonlinear_act,
+                        nn.Linear(nf, nf),
+                        nonlinear_act,
                         nn.Linear(nf, nf),
                         nonlinear_act,
                         nn.Linear(nf, 1)
@@ -176,7 +176,7 @@ class ActorCritic(nn.Module):
         
     def set_action_std(self, new_action_std):
         if self.has_continuous_action_space:
-            self.action_var = torch.full((self.action_dim,), new_action_std * new_action_std).to(device)
+            self.action_var = torch.full((self.action_dim,), new_action_std * new_action_std).type(torch.float64).to(device)
         else:
             print("--------------------------------------------------------------------------------------------")
             print("WARNING : Calling ActorCritic::set_action_std() on discrete action space policy")
@@ -185,15 +185,21 @@ class ActorCritic(nn.Module):
     def forward(self):
         raise NotImplementedError
     
-    def act(self, state):
+    def act(self, state, is_testing=False):
         
         if self.has_continuous_action_space:
-            action_mean = self.actor(state)
-            
-            
+            try:
+                action_mean = self.actor(state)
+            except:
+                action_mean = self.actor(state.type(dtype=torch.float32)).type(dtype=torch.float64)
+
             cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
             dist = MultivariateNormal(action_mean, cov_mat)
-            action = dist.sample()
+
+            if not is_testing:
+                action = dist.sample()
+            else:
+                action = action_mean
 
             clipped_action = torch.clip(action, -1, 1)
             action = clipped_action
@@ -206,7 +212,11 @@ class ActorCritic(nn.Module):
     def evaluate(self, state, action):
         if self.has_continuous_action_space:
 
-            action_mean = self.actor(state)
+            try:
+                action_mean = self.actor(state)
+            except:
+                action_mean = self.actor(state.type(dtype=torch.float32)).type(dtype=torch.float64)
+                
             action_var = self.action_var.expand_as(action_mean)
             cov_mat = torch.diag_embed(action_var).to(device)
             dist = MultivariateNormal(action_mean, cov_mat)
@@ -214,8 +224,12 @@ class ActorCritic(nn.Module):
             
             log_probs = action_logprobs
             
-            # State values 
-            state_values = self.critic(state)
+            # State values
+            try:
+                state_values = self.critic(state)
+            except:
+                state_values = self.critic(state.type(dtype=torch.float32)).type(dtype=torch.float64)
+            
 
             dist_gaussian = dist.entropy()
             dist_entropy = dist_gaussian
