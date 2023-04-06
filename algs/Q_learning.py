@@ -7,7 +7,7 @@ import numpy as np
 
 from algs.Q_discrete import Q_learning as Q_learning_discrete
 from algs.Q_continuous import Q_learning as Q_learning_continuous
-
+from utls.utls import STL_IDS, STLNode
 from tqdm import tqdm
 
 def rollout(env, agent, param, i_episode, testing=False, visualize=False, to_hallucinate=False):
@@ -88,7 +88,8 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False, to_hal
         env.render(states=states, save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
     return ep_reward, disc_ep_reward, t
         
-def run_Q_learning(param, env, second_order = False, continuous_state=True, to_hallucinate=False):
+def run_Q_learning(param, env, second_order = False, continuous_state=True, to_hallucinate=False,
+                   stl_critic=False):
     
     if continuous_state:
         agent = Q_learning_continuous(env.observation_space, env.action_space, param['gamma'], param)

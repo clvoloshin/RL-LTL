@@ -7,8 +7,66 @@ from typing import Iterable
 import itertools
 from functools import partial
 from typing import Callable
+import mtl
+from mtl import ast
 
+STL_IDS = ["G", "E", "&", "~", "|", "rho"]
 
+class STLNode():
+    
+    def __init__(self, id: str, children, time_bounds: tuple=None, rho=None) -> None:
+        self.id = id
+        self.children = children
+        if self.id == "rho":
+            assert len(self.children) == 0
+        elif self.id not in ["&", "|"]:
+            # if it's not an 'and' or an 'or', it should only have one child
+            assert len(self.children) == 1
+        self.rho = rho
+        self.time_bounds = time_bounds
+        self.order = None
+    
+    def set_ordering(self, order):
+        self.order = order
+
+def parse_stl_into_tree(stl_formula):
+    '''
+    stl_formula: STL string formatted in MTL library format
+    see https://github.com/mvcisback/py-metric-temporal-logic
+    env: string
+    '''
+    phi = mtl.parse(stl_formula)
+    #TODO: include time bounds from the formula if they exist
+    return parse_helper(phi)
+
+def parse_helper(curr_phi):
+    #TODO: include time bounds from the formula if they exist
+    # match based on id
+    if type(curr_phi) == ast.Neg:
+        id = "~"
+    elif type(curr_phi) == ast.WeakUntil:
+        print("Support for Until is not ready!")
+        raise NotImplementedError
+    elif type(curr_phi) == ast.AtomicPred:
+        id = "rho"  # at a leaf
+        robustness_fxn = str(curr_phi)
+        return STLNode(id, [], rho=robustness_fxn)
+    elif curr_phi.OP == "G":
+        id = "G"
+    elif curr_phi.OP == "&":
+        id = "&"
+    elif curr_phi.OP == "|":
+        id = "|"
+    else:
+        import pdb; pdb.set_trace()
+        print("operator {} not supported!".format(curr_phi.OP))
+        raise NotImplementedError()
+    # get the children of the current node
+    node_children = []
+    for child in curr_phi.children:
+        node_children.append(parse_helper(child))
+    return STLNode(id, children=node_children)
+    
 def timeit(func):
     def wrapper(*arg, **kw):
         tic = time.time()

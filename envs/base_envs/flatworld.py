@@ -57,8 +57,7 @@ class FlatWorld(gym.Env):
             self.action_space = spaces.Box(-1, +1, (2,), dtype=np.float32)
         else:
             # up, right, down, left, nothing
-            self.action_space = spaces.Discrete(5)
-            
+            self.action_space = spaces.Discrete(5)            
 
         # self.obs_1 = np.array([0.0, 0.9, -1.0, -0.5])     # red box in bottom right corner
         # self.obs_2 = np.array([.2, 0.7, 0.8, 1.2])        # green box in top right corner
@@ -71,13 +70,34 @@ class FlatWorld(gym.Env):
         self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
         self.obs_4 = np.array([-1.7/2, .3/2, .3])    # orange box on the left
         
-        # self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
-        self.circles = [(self.obs_1, 'r'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        self.timestep = 0  # set time to keep count of STL values
+        
+        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        #self.circles = [(self.obs_2, 'y'), (self.obs_3, 'b')]
+        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_3, 'b': self.obs_4}
+        self.rho_alphabet = list(self.circles_map.keys())
 
         self.state = np.array([-1, -1])
         self.render_mode = render_mode
         self.fig, self.ax = plt.subplots(1, 1)
-        
+        self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
+    
+    def compute_rho(self):
+        # return a map from string to value for each robustness fxn
+        all_robustness_vals = np.zeros(len(self.circles))
+        for idx, (region_symbol, circle) in enumerate(self.circles_map.items()):
+            coordinates = circle[:2]
+            radius = self.circles_map[region_symbol][-1]
+            distance = np.linalg.norm(self.state - coordinates)
+            if distance < radius:  # in the region, satisfying the property
+                computed_rho = 0
+            else:
+                # want rho_max to be 0
+                computed_rho = -1 * distance  
+            all_robustness_vals[idx] = computed_rho
+            self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
+        return all_robustness_vals
+    
     def reset(
         self,
         *,
@@ -86,6 +106,9 @@ class FlatWorld(gym.Env):
     ):
         
         self.state = np.array([-1, -1])
+        # reset the collected STL rho values
+        self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
+
 
         return self.state, {}
     
@@ -93,7 +116,6 @@ class FlatWorld(gym.Env):
         return self.state
         
     def label(self, state):
-        state
         signal, labels = {}, {}
         for circle, color in self.circles:
             val = np.linalg.norm(state - circle[:-1])
@@ -135,8 +157,8 @@ class FlatWorld(gym.Env):
         self.state = self.state.reshape(-1)
         cost = np.linalg.norm(action)
         terminated = False
-
-        return self.state, cost, terminated, {}
+        rho_vals = self.compute_rho()            
+        return self.state, cost, terminated, {"rho": rho_vals}
 
     @plotlive
     def render(self, states = [], save_dir=None):
