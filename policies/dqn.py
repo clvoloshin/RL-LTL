@@ -121,10 +121,19 @@ class DQNSTL(nn.Module):
                         nn.ReLU(),
                         nn.Linear(128, 128),
                         nn.ReLU(),
-                        nn.Linear(128, 64)
+                        nn.Linear(128, 128)
                     )
         # make the structure of the head more complicated than a single linear layer
-        self.heads = [nn.Linear(64, act_space.n) for _ in range(num_heads)]
+        # self.heads = [nn.Sequential(
+        #                 nn.Linear(env_space.shape[0], 128),
+        #                 nn.ReLU(),
+        #                 nn.Linear(128, 128),
+        #                 nn.ReLU(),
+        #                 nn.Linear(128, act_space.n)) for _ in range(num_heads)]
+        self.heads = [nn.Sequential(
+                        nn.Linear(128, 128),
+                        nn.ReLU(),
+                        nn.Linear(128, act_space.n)) for _ in range(num_heads)]
 
         self.gamma = param['gamma']
         self.n_mdp_actions = act_space.n
@@ -140,6 +149,7 @@ class DQNSTL(nn.Module):
     
     def forward(self, state):
         q_intermed = self.forward_base(state).squeeze()
+        #qs = self.forward_head(state, 0)
         qs = self.forward_head(q_intermed, 0)
         return qs
         

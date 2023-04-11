@@ -86,7 +86,7 @@ class STL_Q_learning():
         print(f'Setting temperature: {self.temp}')
         
     def reset_td_errors(self):
-        self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, self.n_mdp_actions)
+        self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, self.n_mdp_actions, requires_grad=True)
         
     def collect(self, s, a, rhos, s_):
         self.buffer.add(s, a, rhos, s_)
@@ -127,12 +127,15 @@ class STL_Q_learning():
             phi_val = self.recurse_node(current_node.children[0], s, act, rhos, s_next)
         q_s_next = self.stl_q_net.forward_base(s_next)
         # operator-specific head
+        #q_s_next_head = self.stl_q_net.forward_head(s_next, current_node.order)
         q_s_next_head = self.stl_q_net.forward_head(q_s_next, current_node.order)
         q_action = q_s_next_head[torch.arange(q_s_next_head.shape[0]), act]  # TODO: is there a smarter way to do this?
         if cid == "G":
+            #import pdb; pdb.set_trace()
             td_val = torch.minimum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :,  act] = td_val.float()
-        elif cid == "E":    
+        elif cid == "E":
+            #import pdb; pdb.set_trace()    
             td_val = torch.maximum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :, act] = td_val.float()
         return phi_val
@@ -143,6 +146,7 @@ class STL_Q_learning():
         #TODO: check that our recursive traversal does the same
         # as the DFS search in set_heads
         #TODO: finish
+        total_loss = 0
         for _ in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():
@@ -158,12 +162,14 @@ class STL_Q_learning():
             q_values = []  ##  TODO: check if this is ok
             q_val_base = self.stl_q_net.forward_base(s)
             for head_idx in range(self.num_temporal_ops):
+                #q_values.append(self.stl_q_net.forward_head(s, head_idx))
                 q_values.append(self.stl_q_net.forward_head(q_val_base, head_idx))
             q_values = torch.stack(q_values)
             targets = self.td_error_vector
+            #import pdb; pdb.set_trace()
             loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.clone().detach())
-
+            total_loss += loss
 
             # backward optimize
             self.optimizer.zero_grad()
@@ -173,13 +179,16 @@ class STL_Q_learning():
             if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
                 self.update_target_network()
                 #self.reset_td_errors()
-                self.iterations_since_last_target_update = 0        
+                self.iterations_since_last_target_update = 0
+        return total_loss / self.n_batches        
                 
 def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     # execute an episode of the policy acting in the environment
     states = []
     state, _ = env.reset()
     states.append(state)
+    s = torch.tensor(state).type(torch.float)
+    max_q_val = torch.max(agent.stl_q_net(s)).detach().numpy()
     if not testing: agent.buffer.restart_traj()
     if testing & visualize:
         s = torch.tensor(state).type(torch.float)
@@ -206,7 +215,7 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     all_rho_vals = env.episode_rhos
     if visualize:
         env.render(states=states, save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
-    return all_rho_vals, t
+    return all_rho_vals, max_q_val, t
 
 def run_Q_STL(param, env):
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
@@ -217,13 +226,16 @@ def run_Q_STL(param, env):
     success_history = []
     running_reward = 10
     fixed_state, _ = env.reset()
+    current_loss = 0  # placeholder value
+    all_losses = [current_loss]
 
     for i_episode in range(param['q_learning']['n_traj']):
         # TRAINING
-        all_rhos, t = rollout(env, agent, param, i_episode, testing=False)
+        all_rhos, max_q_val, t = rollout(env, agent, param, i_episode, testing=False)
         stl_val = varphi(all_rhos)
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
-            agent.update()
+            current_loss = agent.update().item()
+            all_losses.append(current_loss)
         
         if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0:
             agent.decay_temp(param['q_learning']['temp_decay_rate'], param['q_learning']['min_action_temp'], param['q_learning']['temp_decay_type'])
@@ -231,7 +243,7 @@ def run_Q_STL(param, env):
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                all_rhos, t = rollout(env, agent, param, test_iter, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) )
+                all_rhos, max_q_val, t = rollout(env, agent, param, test_iter, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) )
                 stlval = varphi(all_rhos)
                 test_data.append((stlval, t))
             test_data = np.array(test_data)
@@ -243,13 +255,14 @@ def run_Q_STL(param, env):
             #import pdb; pdb.set_trace()
             success_history += [test_data[:, 0].mean()]
             method = 'STLQ'
-            plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
+            plot_something_live(axes, [np.arange(len(history)),  np.arange(len(all_losses))], [history, all_losses], method)
             logger.logkv('Iteration', i_episode)
             logger.logkv('Method', method)
             logger.logkv('Success', success_history[-1])
             logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
             logger.logkv('EpisodeRhos', stl_val)
-            logger.logkv('DiscEpisodeReward', stl_val)  #TODO: fix this!
+            logger.logkv('ExpectedQVal', max_q_val)  
+            logger.logkv('LossVal', current_loss)
             logger.logkv('TimestepsAlive', avg_timesteps)
             logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['q_learning']['T'])
             logger.logkv('ActionTemp', agent.temp)

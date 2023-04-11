@@ -13,3 +13,4 @@ networkx
 dotmap
 shapely
 pillow
+metric-temporal-logic

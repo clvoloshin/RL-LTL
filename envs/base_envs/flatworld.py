@@ -152,12 +152,13 @@ class FlatWorld(gym.Env):
         B = np.eye(2) * Δt
         # action = np.clip(u, -1, +1).astype(np.float32)
         action = u
-
+        rho_vals = self.compute_rho()  
         self.state = A @ self.state.reshape(2, 1) + B @ action.reshape(2, 1)
         self.state = self.state.reshape(-1)
         cost = np.linalg.norm(action)
         terminated = False
-        rho_vals = self.compute_rho()            
+                  
+
         return self.state, cost, terminated, {"rho": rho_vals}
 
     @plotlive

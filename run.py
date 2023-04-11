@@ -15,7 +15,7 @@ from algs.Q_stl import run_Q_STL
 from algs.ppo import run_PPO
 import numpy as np
 from envs.abstract_env import Simulator
-from automaton import Automaton, AutomatonRunner
+#from automaton import Automaton, AutomatonRunner
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.masked.maskedtensor")
