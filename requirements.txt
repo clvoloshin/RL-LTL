@@ -14,3 +14,7 @@ dotmap
 shapely
 pillow
 metric-temporal-logic
+hydra-core
+wandb
+omegaconf
+moviepy

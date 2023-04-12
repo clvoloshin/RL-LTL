@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from utls.plotutils import plotlive
+from moviepy.video.io.bindings import mplfig_to_npimage
+
 fontsize = 24
 matplotlib.rc('xtick', labelsize=fontsize) 
 matplotlib.rc('ytick', labelsize=fontsize) 
@@ -39,12 +41,12 @@ class FlatWorld(gym.Env):
         low = np.array(
             [
                 -2,
-                2
+                -2
             ]
         ).astype(np.float32)
         high = np.array(
             [
-                -2,
+                2,
                 2
             ]
         ).astype(np.float32)
@@ -74,7 +76,7 @@ class FlatWorld(gym.Env):
         
         self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
         #self.circles = [(self.obs_2, 'y'), (self.obs_3, 'b')]
-        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_3, 'b': self.obs_4}
+        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3}
         self.rho_alphabet = list(self.circles_map.keys())
 
         self.state = np.array([-1, -1])
@@ -84,16 +86,25 @@ class FlatWorld(gym.Env):
     
     def compute_rho(self):
         # return a map from string to value for each robustness fxn
+        normalization = np.linalg.norm(self.observation_space.high - self.observation_space.low)
         all_robustness_vals = np.zeros(len(self.circles))
         for idx, (region_symbol, circle) in enumerate(self.circles_map.items()):
             coordinates = circle[:2]
             radius = self.circles_map[region_symbol][-1]
             distance = np.linalg.norm(self.state - coordinates)
-            if distance < radius:  # in the region, satisfying the property
-                computed_rho = 0
+            delta = radius - distance # if delta > 0 then inside circle, if < 0 then outside
+            
+
+
+
+            # if distance < radius:  # in the region, satisfying the property
+            #     computed_rho = 0 * 2 + 1 #make rho in [-rhomax, rhomax] = [-1, 1]
+            # else:
+            #     computed_rho = -1 * distance * 2 / normalization + 1
+            if delta > 0:  # in [-1, 1]
+                computed_rho = delta / radius
             else:
-                # want rho_max to be 0
-                computed_rho = -1 * distance  
+                computed_rho = delta / normalization
             all_robustness_vals[idx] = computed_rho
             self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
         return all_robustness_vals
@@ -109,6 +120,7 @@ class FlatWorld(gym.Env):
         # reset the collected STL rho values
         self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
 
+        self.timestep = 0
 
         return self.state, {}
     
@@ -152,14 +164,20 @@ class FlatWorld(gym.Env):
         B = np.eye(2) * Δt
         # action = np.clip(u, -1, +1).astype(np.float32)
         action = u
-        rho_vals = self.compute_rho()  
+        info = self.get_info()
+        self.timestep += 1
         self.state = A @ self.state.reshape(2, 1) + B @ action.reshape(2, 1)
         self.state = self.state.reshape(-1)
+        self.state = np.clip(self.state, self.observation_space.low, self.observation_space.high)
         cost = np.linalg.norm(action)
         terminated = False
+        
                   
 
-        return self.state, cost, terminated, {"rho": rho_vals}
+        return self.state, cost, terminated, info
+
+    def get_info(self):
+        return {"rho": self.compute_rho()}
 
     @plotlive
     def render(self, states = [], save_dir=None):
@@ -212,6 +230,9 @@ class FlatWorld(gym.Env):
 
         if save_dir is not None:
             self.fig.savefig(save_dir)
+
+        numpy_fig = mplfig_to_npimage(self.fig)  # convert it to a numpy array
+        return numpy_fig
         
         # self.ax.grid()
         # plt.show(block=False)

@@ -75,7 +75,6 @@ class Simulator(gym.Env):
         except:
             self.action_space['total'] = 1 + max(eps_per_state)
         
-
         self.accepting_states = set()
         self.rejecting_states = set()
         self.inf_often = []
@@ -177,6 +176,7 @@ class Simulator(gym.Env):
             automaton_state = self.automaton.step(label) # Do we take this step right now???
             cost = 0
             done = False
+            info = self.mdp.get_info()
             # dic = {'state' : self.mdp.index_to_state(self.mdp.get_state())}
             # info = {'mdp_state': state, 'aut_state': automaton_state}
             # next_state = self.states.setdefault((state, automaton_state), len(self.states))
@@ -190,7 +190,12 @@ class Simulator(gym.Env):
             label, _ = self.mdp.label(state)
             automaton_state = self.automaton.step(label)
         
-        info = {'prev_mdp_state': current_mdp_state, 'prev_aut_state': current_aut_state , 's_': state, 'aut_state': automaton_state, 'label': label, 'is_accepting': automaton_state in self.automaton.automaton.accepting_states}
+
+        new_info = {'prev_mdp_state': current_mdp_state, 'prev_aut_state': current_aut_state , 's_': state, 'aut_state': automaton_state, 'label': label, 'is_accepting': automaton_state in self.automaton.automaton.accepting_states}
+        try:
+            new_info.update(info)
+        except:
+            import pdb; pdb.set_trace()
 
         if automaton_state is None:
             import pdb; pdb.set_trace()
@@ -206,13 +211,13 @@ class Simulator(gym.Env):
         #     self.mdp.set_state(current_mdp_state)
         #     self.automaton.set_state(current_aut_state)
 
-        return {'mdp': state, 'buchi': automaton_state}, cost, done, info
+        return {'mdp': state, 'buchi': automaton_state}, cost, done, new_info
         # one_hot = np.zeros(self.automaton.n_states)
         # one_hot[automaton_state] = 1.
         # return np.hstack([state, one_hot]), cost, done, info
     
     def render(self, *args, **kw):
-        self.mdp.render(*args, **kw)
+        return self.mdp.render(*args, **kw)
     
     def plot(self, *args, **kwargs):
         try:

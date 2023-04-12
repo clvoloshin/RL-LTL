@@ -146,6 +146,8 @@ class AutomatonState(object):
 
 class Automaton(object):
     def __init__(self, formula="True", oa_type='dra', rabinizer=None, autobuild=False) -> None:
+        
+        formula = formula.replace("~", "!")
         self.formula = self.build_formula(formula, autobuild)
         self.oa_type = oa_type
 

@@ -7,6 +7,9 @@ from utls.plotutils import plot_something_live
 import numpy as np
 from utls.utls import STL_IDS, STLNode, parse_stl_into_tree
 from policies.dqn import BufferSTL, DQNSTL
+import wandb
+from pathlib import Path
+from tqdm import tqdm
 
 device = torch.device('cpu')
 # if(torch.cuda.is_available()): 
@@ -31,7 +34,7 @@ class STL_Q_learning():
         all_params = []
         for head in self.stl_q_net.heads:
             all_params.extend(head.parameters())
-        all_params.extend(self.stl_q_net.actor_base.parameters())
+        all_params.extend(self.stl_q_net.actor.parameters())
         self.optimizer = torch.optim.Adam([
                 {'params': all_params, 'lr': param['q_learning']['lr']},
             ])
@@ -40,7 +43,7 @@ class STL_Q_learning():
         self.rho_alphabet = rho_alphabet
         self.num_rho = len(self.rho_alphabet)
     
-        self.buffer = BufferSTL(env_space.shape, self.num_rho, param['replay_buffer_size'])
+        self.buffer = BufferSTL(env_space['mdp'].shape, self.num_rho, param['replay_buffer_size'])
         self.temp = param['q_learning']['init_temp']
         
         self.n_batches = param['q_learning']['batches_per_update']
@@ -49,26 +52,32 @@ class STL_Q_learning():
         self.iterations_since_last_target_update = 0
         
         self.gamma = gamma
-        self.n_mdp_actions = act_space.n
+        self.n_mdp_actions = act_space['total']
         self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, self.n_mdp_actions)
-
+        self.num_updates_called = 0
+        
     
     def update_target_network(self):
         # copy current_network to target network
         self.stl_q_target.load_state_dict(self.stl_q_net.state_dict())
-
+    
     def select_action(self, state, is_testing):
         if is_testing or (np.random.uniform() > self.temp):
             with torch.no_grad():
-                state_tensor = torch.FloatTensor(state).to(device)
-                action = self.stl_q_net.act(state_tensor)
+                state_tensor = torch.FloatTensor(state['mdp']).to(device)
+                buchi = state['buchi']
+                action, is_eps, action_logprob = self.stl_q_net.act(state_tensor, buchi)
 
-            return action
+            return action, is_eps, action_logprob
         else:
             with torch.no_grad():
-                state_tensor = torch.FloatTensor(state).to(device)
-                action = self.stl_q_net.random_act(state_tensor)
-            return action
+                state_tensor = torch.FloatTensor(state['mdp']).to(device)
+                buchi = state['buchi']
+                action, is_eps, action_logprob = self.stl_q_net.random_act(state, buchi)
+            return action, is_eps, action_logprob
+
+    def collect(self, s, b, a, r, s_, b_):
+        self.buffer.add(s, b, a, r, s_, b_)
     
     def decay_temp(self, decay_rate, min_temp, decay_type):
         
@@ -88,9 +97,6 @@ class STL_Q_learning():
     def reset_td_errors(self):
         self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, self.n_mdp_actions, requires_grad=True)
         
-    def collect(self, s, a, rhos, s_):
-        self.buffer.add(s, a, rhos, s_)
-    
     def set_ordering(self):
         num_expr = 0
         queue = [self.stl_tree]
@@ -107,7 +113,7 @@ class STL_Q_learning():
                 queue.append(child)
         return num_temporal_ops
     
-    def recurse_node(self, current_node, s, act, rhos, s_next):
+    def recurse_node(self, current_node, s, b, act, rhos, s_next, b_next):
         cid = current_node.id
         if cid == "rho":
             # evaluate the robustness function using the rho belonging to that node
@@ -116,57 +122,76 @@ class STL_Q_learning():
         elif cid in ["&", "|"]:
             all_phi_vals = []
             for child in current_node.children:
-                all_phi_vals.append(self.recurse_node(child, s, act, rhos, s_next))
+                all_phi_vals.append(self.recurse_node(child, s, b, act, rhos, s_next, b_next))
             # and case and or case are min and max, respectively
             phi_val = torch.min(torch.stack(all_phi_vals), dim=0).values if cid == "&" else torch.max(torch.stack(all_phi_vals), dim=0).values
             return phi_val
         elif cid == "~":  # negation case
-            phi_val = self.recurse_node(current_node.children[0], s, act, rhos, s_next)
+            phi_val = self.recurse_node(current_node.children[0], s, b, act, rhos, s_next, b_next)
             return -1 * phi_val
         else:  # G or E case: just get it by recursing with a single child
-            phi_val = self.recurse_node(current_node.children[0], s, act, rhos, s_next)
-        q_s_next = self.stl_q_net.forward_base(s_next)
-        # operator-specific head
-        #q_s_next_head = self.stl_q_net.forward_head(s_next, current_node.order)
-        q_s_next_head = self.stl_q_net.forward_head(q_s_next, current_node.order)
-        q_action = q_s_next_head[torch.arange(q_s_next_head.shape[0]), act]  # TODO: is there a smarter way to do this?
+            phi_val = self.recurse_node(current_node.children[0], s, b, act, rhos, s_next, b_next)
+        
+        
+        # q_s_next = self.stl_q_net.forward_base(s_next)
+        # # operator-specific head
+        # #q_s_next_head = self.stl_q_net.forward_head(s_next, current_node.order)
+        # q_s_next_head = self.stl_q_net.forward_head(q_s_next, current_node.order)
+        
+
+        # q_action = q_s_next_head[torch.arange(q_s_next_head.shape[0]), act]  # TODO: is there a smarter way to do this?
+        q_action = self.stl_q_net.interior_forward(s_next, b_next, current_node.order)[torch.arange(s_next.shape[0]), act].to_tensor(0)
         if cid == "G":
-            #import pdb; pdb.set_trace()
             td_val = torch.minimum(phi_val, self.gamma * q_action)
-            self.td_error_vector[current_node.order, :,  act] = td_val.float()
+            self.td_error_vector[current_node.order, np.arange(len(act)),  act] = td_val.float()
         elif cid == "E":
-            #import pdb; pdb.set_trace()    
             td_val = torch.maximum(phi_val, self.gamma * q_action)
-            self.td_error_vector[current_node.order, :, act] = td_val.float()
+            self.td_error_vector[current_node.order, np.arange(len(act)), act] = td_val.float()
         return phi_val
         
     
-    def update(self):
+    def update(self, runner):
+        num_prev_epochs = self.num_updates_called * self.n_batches
+        self.num_updates_called += 1
+
         # update based on the STL recursive semantics
         #TODO: check that our recursive traversal does the same
         # as the DFS search in set_heads
         #TODO: finish
         total_loss = 0
-        for _ in range(self.n_batches):
+        for k in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():
-                s, a, rhos, s_, = self.buffer.sample(self.batch_size)
+                # s, a, rhos, s_, = self.buffer.sample(self.batch_size)
+                
+                s, b, a, rhos, s_, b_ = self.buffer.sample(self.batch_size)
                 s = torch.tensor(s).type(torch.float)
+                b = torch.tensor(b).type(torch.int64).unsqueeze(1).unsqueeze(1)
                 s_ = torch.tensor(s_).type(torch.float)
+                b_ = torch.tensor(b_).type(torch.int64).unsqueeze(1).unsqueeze(1)
                 rhos = torch.tensor(rhos)
                 a = torch.tensor(a)
+                
                 # compute TD values
                 self.reset_td_errors()
-                self.recurse_node(self.stl_tree, s, a, rhos, s_)
+                self.recurse_node(self.stl_tree, s, b, a, rhos, s_, b_)
+            
             # compute all q values for all heads
-            q_values = []  ##  TODO: check if this is ok
-            q_val_base = self.stl_q_net.forward_base(s)
-            for head_idx in range(self.num_temporal_ops):
-                #q_values.append(self.stl_q_net.forward_head(s, head_idx))
-                q_values.append(self.stl_q_net.forward_head(q_val_base, head_idx))
-            q_values = torch.stack(q_values)
-            targets = self.td_error_vector
-            #import pdb; pdb.set_trace()
+            # q_values = []  ##  TODO: check if this is ok
+            # q_val_base = self.stl_q_net.forward_base(s)
+            # for head_idx in range(self.num_temporal_ops):
+            #     #q_values.append(self.stl_q_net.forward_head(s, head_idx))
+            #     q_values.append(self.stl_q_net.forward_head(q_val_base, head_idx))
+            # q_values = torch.stack(q_values)
+            
+            # TODO: Make more computationally efficient by not calling the base so many times
+            q_values = torch.stack([self.stl_q_net.interior_forward(s, b, head_idx, False)[torch.arange(len(a)), a] for head_idx in range(self.num_temporal_ops)])
+            with torch.no_grad():
+                targets = self.td_error_vector[:, torch.arange(len(a)), a]
+
+            # print(targets.min(), targets.max())
+            # print(q_values.min(), q_values.max())
+            # print()
             loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.clone().detach())
             total_loss += loss
@@ -175,66 +200,116 @@ class STL_Q_learning():
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+            runner.log({
+                'loss': loss.item(),
+            },
+                step=num_prev_epochs + k)
 
-            if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
-                self.update_target_network()
-                #self.reset_td_errors()
-                self.iterations_since_last_target_update = 0
+        if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
+            self.update_target_network()
+            self.iterations_since_last_target_update = 0
         return total_loss / self.n_batches        
                 
-def rollout(env, agent, param, i_episode, testing=False, visualize=False):
-    # execute an episode of the policy acting in the environment
-    states = []
+# def rollout(env, agent, param, i_episode, testing=False, visualize=False):
+#     # execute an episode of the policy acting in the environment
+#     states = []
+#     import pdb; pdb.set_trace()
+#     state, _ = env.reset()
+#     states.append(state)
+#     s = torch.tensor(state).type(torch.float)
+#     max_q_val = torch.max(agent.stl_q_net(s)).detach().numpy()
+#     if not testing: agent.buffer.restart_traj()
+#     if testing & visualize:
+#         s = torch.tensor(state).type(torch.float)
+#         print(0, state, agent.stl_q_net(s).argmax().numpy())
+#         print(agent.stl_q_net(s))
+#     for t in range(param['q_learning']['T']):  # Don't infinite loop while learning
+#         action = agent.select_action(state, testing)
+        
+#         next_state, cost, done, info = env.step(action)  # check is_eps
+#         rhos = info['rho']
+        
+#         if testing & visualize:
+#             s = torch.tensor(next_state).type(torch.float)
+#             print(t, next_state, action)
+#         if not testing:
+#             agent.collect(state, action, rhos, next_state,)
+#             agent.buffer.mark()
+
+#         if done:
+#             break
+#         state = next_state
+#         states.append(next_state)
+
+#     all_rho_vals = env.episode_rhos
+#     if visualize:
+#         env.render(states=states, save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
+#     return all_rho_vals, max_q_val, t
+
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
     state, _ = env.reset()
-    states.append(state)
-    s = torch.tensor(state).type(torch.float)
-    max_q_val = torch.max(agent.stl_q_net(s)).detach().numpy()
+    states = []
     if not testing: agent.buffer.restart_traj()
-    if testing & visualize:
-        s = torch.tensor(state).type(torch.float)
-        print(0, state, agent.stl_q_net(s).argmax().numpy())
-        print(agent.stl_q_net(s))
-    for t in range(1, param['q_learning']['T']):  # Don't infinite loop while learning
-        action = agent.select_action(state, testing)
-        
-        next_state, cost, done, info = env.step(action)  # check is_eps
+    states.append(state['mdp'])
+
+    # actions = [0 if j < 6 else 4 for j in range(param['q_learning']['T'])]
+    # actions = [0 for j in range(param['q_learning']['T'])]
+
+    for t in range(param['q_learning']['T']):  # Don't infinite loop while learning
+        action, is_eps, log_prob = agent.select_action(state, testing)
+
+        # action = actions[t]
+        next_state, cost, done, info = env.step(action, is_eps)
+        # reward = info['is_accepting']
         rhos = info['rho']
-        
-        if testing & visualize:
-            s = torch.tensor(next_state).type(torch.float)
-            print(t, next_state, action)
-        if not testing:
-            agent.collect(state, action, rhos, next_state,)
+
+        if not testing: 
+            agent.collect(state['mdp'], state['buchi'], action, rhos, next_state['mdp'], next_state['buchi'])
             agent.buffer.mark()
 
         if done:
             break
         state = next_state
-        states.append(next_state)
+        states.append(next_state['mdp'])
 
-    all_rho_vals = env.episode_rhos
+    all_rho_vals = env.mdp.episode_rhos
     if visualize:
-        env.render(states=states, save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
-    return all_rho_vals, max_q_val, t
+        # frames = 
+        # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
+        if testing: 
+            runner.log({"testing": wandb.Image(env.render(states=states, save_dir=None))})
+        else:
+            runner.log({"training": wandb.Image(env.render(states=states, save_dir=None))})
+    return all_rho_vals, 0, t
 
-def run_Q_STL(param, env):
+def run_Q_STL(param, runner, env):
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
     varphi = mtl.parse(param['ltl']['formula'])
-    agent = STL_Q_learning(stl_tree, env.observation_space, env.action_space, env.rho_alphabet, param['gamma'], param)
+    agent = STL_Q_learning(stl_tree, env.observation_space, env.action_space, env.mdp.rho_alphabet, param['gamma'], param)
     fig, axes = plt.subplots(2, 1)
     history = []
     success_history = []
     running_reward = 10
     fixed_state, _ = env.reset()
     current_loss = 0  # placeholder value
+    checkpoint_count = 0
     all_losses = [current_loss]
 
-    for i_episode in range(param['q_learning']['n_traj']):
+    for i_episode in tqdm(range(param['q_learning']['n_traj'])):
         # TRAINING
-        all_rhos, max_q_val, t = rollout(env, agent, param, i_episode, testing=False)
+        all_rhos, max_q_val, t = rollout(env, agent, param, i_episode, runner, testing=False, visualize=((i_episode % 50) == 0))
         stl_val = varphi(all_rhos)
+        # if stl_val > 0:
+        #     print(i_episode, agent.buffer.get_rhos())
+        #     X = torch.tensor(agent.buffer.states[agent.buffer.current_traj])
+        #     A = torch.tensor(agent.buffer.buchis[agent.buffer.current_traj])
+        #     agent.stl_q_net.forward(X.type(torch.float), A.type(torch.int64).unsqueeze(1).unsqueeze(1)).argmax(1)
+        #     agent.buffer.actions[agent.buffer.current_traj]
+        #     agent.buffer.actions[agent.buffer.current_traj]
+        #     import pdb; pdb.set_trace()
+
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
-            current_loss = agent.update().item()
+            current_loss = agent.update(runner).item()
             all_losses.append(current_loss)
         
         if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0:
@@ -243,10 +318,18 @@ def run_Q_STL(param, env):
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                all_rhos, max_q_val, t = rollout(env, agent, param, test_iter, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) )
+                all_rhos, max_q_val, t = rollout(env, agent, param, test_iter, runner, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) )
                 stlval = varphi(all_rhos)
                 test_data.append((stlval, t))
             test_data = np.array(test_data)
+
+        # if i_episode % param['checkpoint_freq__n_episodes'] == 0:
+        #     ckpt_path = Path(runner.dir) / f'checkpoint_{checkpoint_count}.pt'
+        #     torch.save(agent.state_dict(), ckpt_path)
+        #     artifact = wandb.Artifact('checkpoint', type='model')
+        #     artifact.add_file(ckpt_path)
+        #     runner.log_artifact(artifact)
+        #     checkpoint_count += 1
     
         if i_episode % 1 == 0:
             avg_timesteps = t #np.mean(timesteps)
@@ -254,19 +337,36 @@ def run_Q_STL(param, env):
             # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
             #import pdb; pdb.set_trace()
             success_history += [test_data[:, 0].mean()]
-            method = 'STLQ'
-            plot_something_live(axes, [np.arange(len(history)),  np.arange(len(all_losses))], [history, all_losses], method)
-            logger.logkv('Iteration', i_episode)
-            logger.logkv('Method', method)
-            logger.logkv('Success', success_history[-1])
-            logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
-            logger.logkv('EpisodeRhos', stl_val)
-            logger.logkv('ExpectedQVal', max_q_val)  
-            logger.logkv('LossVal', current_loss)
-            logger.logkv('TimestepsAlive', avg_timesteps)
-            logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['q_learning']['T'])
-            logger.logkv('ActionTemp', agent.temp)
+            # method = 'STLQ'
+            # plot_something_live(axes, [np.arange(len(history)),  np.arange(len(all_losses))], [history, all_losses], method)
+            # logger.logkv('Iteration', i_episode)
+            # logger.logkv('Method', method)
+            # logger.logkv('Success', success_history[-1])
+            # logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
+            # logger.logkv('EpisodeRhos', stl_val)
+            # logger.logkv('ExpectedQVal', max_q_val)  
+            # logger.logkv('LossVal', current_loss)
+            # logger.logkv('TimestepsAlive', avg_timesteps)
+            # logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['q_learning']['T'])
+            # logger.logkv('ActionTemp', agent.temp)
             
-            logger.dumpkvs()
+            # logger.dumpkvs()
+            runner.log({'Iteration': i_episode,
+                    #  'last_reward': last_reward,
+                    #  'Method': method,
+                    #  'Success': success_history[-1],
+                    #  'Last20Success': np.mean(np.array(success_history[-20:])),
+                    #  'DiscSuccess': disc_success_history[-1],
+                    #  'Last20DiscSuccess': np.mean(np.array(disc_success_history[-20:])),
+                    #  'EpisodeReward': ep_reward,
+                    #  'DiscEpisodeReward': disc_ep_reward,
+                    # 'EpisodeRhos': stl_val,
+                    # 'ExpectedQVal': max_q_val,
+                    'STL': stl_val,
+                    'LossVal': current_loss,
+                    #  'TimestepsAlive': avg_timesteps,
+                    #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
+                     'ActionTemp': agent.temp,
+                     })
             
     plt.close()
