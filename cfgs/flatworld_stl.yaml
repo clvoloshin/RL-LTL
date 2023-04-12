@@ -34,7 +34,7 @@ q_learning:
   temp_decay_rate: .9
   temp_decay_type: 'exponential'
   min_action_temp: .15
-  lr: .001
+  lr: .0001
   iterations_per_target_update: 15
   n_traj: 2000
   T: 50

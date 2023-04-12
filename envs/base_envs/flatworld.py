@@ -157,8 +157,6 @@ class FlatWorld(gym.Env):
         self.state = self.state.reshape(-1)
         cost = np.linalg.norm(action)
         terminated = False
-                  
-
         return self.state, cost, terminated, {"rho": rho_vals}
 
     @plotlive

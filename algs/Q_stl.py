@@ -231,6 +231,7 @@ def run_Q_STL(param, env):
 
     for i_episode in range(param['q_learning']['n_traj']):
         # TRAINING
+        # here, we can set visualize=True to take a look at the trajectories we generate.
         all_rhos, max_q_val, t = rollout(env, agent, param, i_episode, testing=False)
         stl_val = varphi(all_rhos)
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
@@ -260,7 +261,7 @@ def run_Q_STL(param, env):
             logger.logkv('Method', method)
             logger.logkv('Success', success_history[-1])
             logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
-            logger.logkv('EpisodeRhos', stl_val)
+            logger.logkv('EpisodePhi', stl_val)
             logger.logkv('ExpectedQVal', max_q_val)  
             logger.logkv('LossVal', current_loss)
             logger.logkv('TimestepsAlive', avg_timesteps)
