@@ -195,10 +195,13 @@ class STL_Q_learning():
             # q_values = torch.stack(q_values)
             
             # TODO: Make more computationally efficient by not calling the base so many times
+
+            # Q(s, a)
             q_values = torch.stack([self.stl_q_net.interior_forward(s, b, head_idx, False)[torch.arange(len(a)), a] for head_idx in range(self.num_temporal_ops)])
             with torch.no_grad():
+                #  ~= r + gamma * max_{a'} Q(s', a')
                 targets = self.td_error_vector #[:, torch.arange(len(a)), a]
-                
+
             print(targets.min(), targets.max())
             print(q_values.min(), q_values.max())
             print()
