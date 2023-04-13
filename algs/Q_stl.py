@@ -10,6 +10,7 @@ from policies.dqn import BufferSTL, DQNSTL
 import wandb
 from pathlib import Path
 from tqdm import tqdm
+import pandas as pd
 
 device = torch.device('cpu')
 # if(torch.cuda.is_available()): 
@@ -95,7 +96,7 @@ class STL_Q_learning():
         print(f'Setting temperature: {self.temp}')
         
     def reset_td_errors(self):
-        self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, requires_grad=True)
+        self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, requires_grad=False)
         
     def set_ordering(self):
         num_expr = 0
@@ -133,24 +134,13 @@ class STL_Q_learning():
             phi_val = self.recurse_node(current_node.children[0], s, b, act, rhos, s_next, b_next)
         
         
-        # q_s_next = self.stl_q_net.forward_base(s_next)
-        # # operator-specific head
-        # #q_s_next_head = self.stl_q_net.forward_head(s_next, current_node.order)
-        # q_s_next_head = self.stl_q_net.forward_head(q_s_next, current_node.order)
-        
-
         # q_action = q_s_next_head[torch.arange(q_s_next_head.shape[0]), act]  # TODO: is there a smarter way to do this?
-        Qs = self.stl_q_target.interior_forward(s_next, b_next, current_node.order)
-        max_actions = Qs.argmax(dim = 1).to_tensor(0).long()
-        q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), max_actions]
-
-        # Qs[torch.arange(s_next.shape[0]), max_actions]
-
-        # qs = torch.take_along_dim(Qs.to_tensor(0), max_actions.to_tensor(0).long(), dim=0)
-        # q_action = [torch.arange(s_next.shape[0]), act].to_tensor(0)
 
         ## originally: Q(s) ~=   min(r, gamma * max_{a'} Q(s', a')) 
         ## ours:       Q(s) ~=       r + gamma * max_{a'} Q(s', a')
+        Qs = self.stl_q_target.interior_forward(s_next, b_next, current_node.order)
+        q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), act]
+
         if cid == "G":
             td_val = torch.minimum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
@@ -184,7 +174,10 @@ class STL_Q_learning():
                 
                 # compute TD values
                 self.reset_td_errors()
-                self.recurse_node(self.stl_tree, s, b, a, rhos, s_, b_)
+
+                Qs = self.stl_q_target(s_, b_)
+                max_actions = Qs.argmax(dim = 1).to_tensor(0).long()
+                self.recurse_node(self.stl_tree, s, b, max_actions, rhos, s_, b_)
             
             # compute all q values for all heads
             # q_values = []  ##  TODO: check if this is ok
@@ -202,9 +195,11 @@ class STL_Q_learning():
                 #  ~= r + gamma * max_{a'} Q(s', a')
                 targets = self.td_error_vector #[:, torch.arange(len(a)), a]
 
-            print(targets.min(), targets.max())
-            print(q_values.min(), q_values.max())
-            print()
+            # print(self.stl_q_target(torch.tensor(self.buffer.states[self.buffer.current_traj]).float(), torch.tensor(self.buffer.buchis[self.buffer.current_traj]).type(torch.int64).unsqueeze(1).unsqueeze(1)))
+            # print(targets.min(), targets.max())
+            # print(q_values.min(), q_values.max())
+            # print()
+            # import pdb; pdb.set_trace()
             loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.clone().detach())
             total_loss += loss
@@ -222,43 +217,7 @@ class STL_Q_learning():
             print('Updating Params' + '*'*50)
             self.update_target_network()
             self.iterations_since_last_target_update = 0
-        return total_loss / self.n_batches        
-                
-# def rollout(env, agent, param, i_episode, testing=False, visualize=False):
-#     # execute an episode of the policy acting in the environment
-#     states = []
-#     import pdb; pdb.set_trace()
-#     state, _ = env.reset()
-#     states.append(state)
-#     s = torch.tensor(state).type(torch.float)
-#     max_q_val = torch.max(agent.stl_q_net(s)).detach().numpy()
-#     if not testing: agent.buffer.restart_traj()
-#     if testing & visualize:
-#         s = torch.tensor(state).type(torch.float)
-#         print(0, state, agent.stl_q_net(s).argmax().numpy())
-#         print(agent.stl_q_net(s))
-#     for t in range(param['q_learning']['T']):  # Don't infinite loop while learning
-#         action = agent.select_action(state, testing)
-        
-#         next_state, cost, done, info = env.step(action)  # check is_eps
-#         rhos = info['rho']
-        
-#         if testing & visualize:
-#             s = torch.tensor(next_state).type(torch.float)
-#             print(t, next_state, action)
-#         if not testing:
-#             agent.collect(state, action, rhos, next_state,)
-#             agent.buffer.mark()
-
-#         if done:
-#             break
-#         state = next_state
-#         states.append(next_state)
-
-#     all_rho_vals = env.episode_rhos
-#     if visualize:
-#         env.render(states=states, save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
-#     return all_rho_vals, max_q_val, t
+        return total_loss / self.n_batches       
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
     state, _ = env.reset()
@@ -313,6 +272,10 @@ def run_Q_STL(param, runner, env):
         # TRAINING
         all_rhos, max_q_val, t = rollout(env, agent, param, i_episode, runner, testing=False, visualize=((i_episode % 50) == 0))
         stl_val = varphi(all_rhos)
+
+        # Qs = agent.stl_q_net(torch.tensor(agent.buffer.states[agent.buffer.current_traj]).float(), torch.tensor(agent.buffer.buchis[agent.buffer.current_traj]).type(torch.int64).unsqueeze(1).unsqueeze(1))
+        # pd.DataFrame(env.mdp.episode_rhos['y'])
+        # import pdb; pdb.set_trace()
         # if stl_val > 0:
         #     print(i_episode, agent.buffer.get_rhos())
         #     X = torch.tensor(agent.buffer.states[agent.buffer.current_traj])
