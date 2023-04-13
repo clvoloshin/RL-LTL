@@ -95,7 +95,7 @@ class STL_Q_learning():
         print(f'Setting temperature: {self.temp}')
         
     def reset_td_errors(self):
-        self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, self.n_mdp_actions, requires_grad=True)
+        self.td_error_vector = torch.zeros(self.num_temporal_ops, self.batch_size, requires_grad=True)
         
     def set_ordering(self):
         num_expr = 0
@@ -140,13 +140,23 @@ class STL_Q_learning():
         
 
         # q_action = q_s_next_head[torch.arange(q_s_next_head.shape[0]), act]  # TODO: is there a smarter way to do this?
-        q_action = self.stl_q_net.interior_forward(s_next, b_next, current_node.order)[torch.arange(s_next.shape[0]), act].to_tensor(0)
+        Qs = self.stl_q_target.interior_forward(s_next, b_next, current_node.order)
+        max_actions = Qs.argmax(dim = 1).to_tensor(0).long()
+        q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), max_actions]
+
+        # Qs[torch.arange(s_next.shape[0]), max_actions]
+
+        # qs = torch.take_along_dim(Qs.to_tensor(0), max_actions.to_tensor(0).long(), dim=0)
+        # q_action = [torch.arange(s_next.shape[0]), act].to_tensor(0)
+
+        ## originally: Q(s) ~=   min(r, gamma * max_{a'} Q(s', a')) 
+        ## ours:       Q(s) ~=       r + gamma * max_{a'} Q(s', a')
         if cid == "G":
             td_val = torch.minimum(phi_val, self.gamma * q_action)
-            self.td_error_vector[current_node.order, np.arange(len(act)),  act] = td_val.float()
+            self.td_error_vector[current_node.order, :] = td_val.float()
         elif cid == "E":
             td_val = torch.maximum(phi_val, self.gamma * q_action)
-            self.td_error_vector[current_node.order, np.arange(len(act)), act] = td_val.float()
+            self.td_error_vector[current_node.order, :] = td_val.float()
         return phi_val
         
     
@@ -187,11 +197,11 @@ class STL_Q_learning():
             # TODO: Make more computationally efficient by not calling the base so many times
             q_values = torch.stack([self.stl_q_net.interior_forward(s, b, head_idx, False)[torch.arange(len(a)), a] for head_idx in range(self.num_temporal_ops)])
             with torch.no_grad():
-                targets = self.td_error_vector[:, torch.arange(len(a)), a]
-
-            # print(targets.min(), targets.max())
-            # print(q_values.min(), q_values.max())
-            # print()
+                targets = self.td_error_vector #[:, torch.arange(len(a)), a]
+                
+            print(targets.min(), targets.max())
+            print(q_values.min(), q_values.max())
+            print()
             loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.clone().detach())
             total_loss += loss
@@ -206,6 +216,7 @@ class STL_Q_learning():
                 step=num_prev_epochs + k)
 
         if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
+            print('Updating Params' + '*'*50)
             self.update_target_network()
             self.iterations_since_last_target_update = 0
         return total_loss / self.n_batches        
