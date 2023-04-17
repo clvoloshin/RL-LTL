@@ -9,7 +9,7 @@ from automaton import Automaton, AutomatonRunner
 from algs.Q_stl import run_Q_STL
 ROOT = Path(__file__).parent
 
-@hydra.main(config_path=str(ROOT / "cfgs"))
+@hydra.main(config_path="./cfgs")
 def main(cfg):
     np.random.seed(cfg.init_seed)
     seeds = [np.random.randint(1e6) for _ in range(cfg.n_seeds)]
