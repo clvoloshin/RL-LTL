@@ -29,9 +29,11 @@ class STL_Q_learning():
         # needs to be in parsable form - follow the above format for now with STLNodes
         self.stl_tree = stl_tree
         self.num_temporal_ops = self.set_ordering()
+        if self.stl_tree.id == "~":  # outermost negative that we need to be considering in the policy!
+            self.outermost_negative = True
         # shared parameters across all heads
-        self.stl_q_net = DQNSTL(env_space, act_space, param, self.num_temporal_ops)
-        self.stl_q_target = DQNSTL(env_space, act_space, param, self.num_temporal_ops)
+        self.stl_q_net = DQNSTL(env_space, act_space, param, self.num_temporal_ops, self.outermost_negative)
+        self.stl_q_target = DQNSTL(env_space, act_space, param, self.num_temporal_ops, self.outermost_negative)
         all_params = []
         for head in self.stl_q_net.heads:
             all_params.extend(head.parameters())
@@ -139,10 +141,8 @@ class STL_Q_learning():
         ## originally: Q(s) ~=   min(r, gamma * max_{a'} Q(s', a')) 
         ## ours:       Q(s) ~=       r + gamma * max_{a'} Q(s', a')
         Qs = self.stl_q_target.interior_forward(s_next, b_next, current_node.order)
-        # TODO: change the 'act' to getting the max values at each of these
-        #import pdb; pdb.set_trace()
-        #q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), act]
-        q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), torch.max(Qs.to_tensor(0), 1).indices]
+        
+        q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), act]
         if cid == "G":
             td_val = torch.minimum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
@@ -201,7 +201,6 @@ class STL_Q_learning():
             # print(targets.min(), targets.max())
             # print(q_values.min(), q_values.max())
             # print()
-            # import pdb; pdb.set_trace()
             loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.clone().detach())
             total_loss += loss
@@ -261,7 +260,6 @@ def run_Q_STL(param, runner, env):
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
     varphi = mtl.parse(param['ltl']['formula'])
     agent = STL_Q_learning(stl_tree, env.observation_space, env.action_space, env.mdp.rho_alphabet, param['gamma'], param)
-    fig, axes = plt.subplots(2, 1)
     history = []
     success_history = []
     running_reward = 10

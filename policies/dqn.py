@@ -268,7 +268,7 @@ class DQN(nn.Module):
         return act, is_eps, 0
     
 class DQNSTL(nn.Module):
-    def __init__(self, env_space, act_space, param, num_heads):
+    def __init__(self, env_space, act_space, param, num_heads, outermost_negative):
         super(DQNSTL, self).__init__()
         
         self.actor = nn.Sequential(
@@ -297,6 +297,7 @@ class DQNSTL(nn.Module):
 
         self.gamma = param['gamma']
         self.n_mdp_actions = act_space['mdp'].n
+        self.outermost_negative = outermost_negative
     
     def interior_forward(self, state, buchi, idx, to_mask=True):
         all_qs = torch.reshape(self.heads[idx](self.actor(state)), (-1,) + self.shp)
@@ -318,6 +319,8 @@ class DQNSTL(nn.Module):
     
     def act(self, state, buchi_state):
         qs = torch.reshape(self.heads[0](self.actor(state)), self.shp)[buchi_state]
+        if self.outermost_negative:
+            qs *= -1
         masked_qs = torch.masked.MaskedTensor(qs, self.mask[buchi_state])
         act = int(masked_qs.argmax())
         is_eps = act >= self.n_mdp_actions
