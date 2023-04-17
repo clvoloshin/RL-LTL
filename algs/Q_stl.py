@@ -139,8 +139,10 @@ class STL_Q_learning():
         ## originally: Q(s) ~=   min(r, gamma * max_{a'} Q(s', a')) 
         ## ours:       Q(s) ~=       r + gamma * max_{a'} Q(s', a')
         Qs = self.stl_q_target.interior_forward(s_next, b_next, current_node.order)
-        q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), act]
-
+        # TODO: change the 'act' to getting the max values at each of these
+        #import pdb; pdb.set_trace()
+        #q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), act]
+        q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), torch.max(Qs.to_tensor(0), 1).indices]
         if cid == "G":
             td_val = torch.minimum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
