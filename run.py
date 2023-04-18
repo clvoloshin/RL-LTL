@@ -20,8 +20,8 @@ def main(cfg):
     automaton = AutomatonRunner(Automaton(**cfg['ltl']))
     sim = Simulator(env, automaton)
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True)) as run:
-    #     run_Q_STL(cfg, run, sim)
-        run_value_iter(cfg, run, sim)
+        run_Q_STL(cfg, run, sim)
+        # run_value_iter(cfg, run, sim)
     print(cfg)
 
 
