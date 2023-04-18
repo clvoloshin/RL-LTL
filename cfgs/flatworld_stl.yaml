@@ -9,7 +9,7 @@ logger:
   dir_name: flatworld_stl
 ltl:
   autobuild: False
-  formula: "FGy"
+  formula: "G(F (y) & ~b)"
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 q_learning:
@@ -21,7 +21,8 @@ q_learning:
   temp_decay_rate: .9
   temp_decay_type: 'exponential'
   min_action_temp: 0.05
-  lr: .00001
+  stl_lr: .00001
+  reward_lr: .00001
   iterations_per_target_update: 500
   n_traj: 2000
   T: 50
@@ -35,3 +36,4 @@ n_seeds: 10
 init_seed: 314
 replay_buffer_size: 5000
 checkpoint_freq__n_episodes: 50
+lambda: 0.8
