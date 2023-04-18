@@ -161,6 +161,7 @@ class STL_Q_learning():
         # as the DFS search in set_heads
         #TODO: finish
         total_loss = 0
+        loss_func = torch.nn.SmoothL1Loss()
         for k in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():
@@ -178,6 +179,8 @@ class STL_Q_learning():
                 self.reset_td_errors()
 
                 Qs = self.stl_q_target(s_, b_)
+                if self.stl_q_target.outermost_negative:
+                    Qs *= -1
                 max_actions = Qs.argmax(dim = 1).to_tensor(0).long()
                 self.recurse_node(self.stl_tree, s, b, max_actions, rhos, s_, b_)
             
@@ -195,14 +198,13 @@ class STL_Q_learning():
             q_values = torch.stack([self.stl_q_net.interior_forward(s, b, head_idx, False)[torch.arange(len(a)), a] for head_idx in range(self.num_temporal_ops)])
             with torch.no_grad():
                 #  ~= r + gamma * max_{a'} Q(s', a')
-                targets = self.td_error_vector #[:, torch.arange(len(a)), a]
+                targets = self.td_error_vector.clone().detach() #[:, torch.arange(len(a)), a]
 
             # print(self.stl_q_target(torch.tensor(self.buffer.states[self.buffer.current_traj]).float(), torch.tensor(self.buffer.buchis[self.buffer.current_traj]).type(torch.int64).unsqueeze(1).unsqueeze(1)))
             # print(targets.min(), targets.max())
             # print(q_values.min(), q_values.max())
             # print()
-            loss_func = torch.nn.SmoothL1Loss()
-            loss = loss_func(q_values, targets.clone().detach())
+            loss = loss_func(q_values, targets)
             total_loss += loss
 
             # backward optimize

@@ -212,9 +212,15 @@ class Simulator(gym.Env):
         #     self.automaton.set_state(current_aut_state)
 
         return {'mdp': state, 'buchi': automaton_state}, cost, done, new_info
-        # one_hot = np.zeros(self.automaton.n_states)
-        # one_hot[automaton_state] = 1.
-        # return np.hstack([state, one_hot]), cost, done, info
+
+    def simulate_step(self, state, buchi, action, is_eps=False):
+        current_mdp_state, current_aut_state = self.mdp.get_state(), self.automaton.get_state()
+        self.mdp.set_state(state)
+        self.automaton.set_state(buchi)
+        output = self.step(action, is_eps)
+        self.mdp.set_state(current_mdp_state)
+        self.automaton.set_state(current_aut_state)
+        return output
     
     def render(self, *args, **kw):
         return self.mdp.render(*args, **kw)

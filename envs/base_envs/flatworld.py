@@ -51,6 +51,13 @@ class FlatWorld(gym.Env):
             ]
         ).astype(np.float32)
 
+        self.dt = .2
+        self.A = np.eye(2)
+        self.B = np.eye(2) * self.dt
+        self.init_state =  np.array([-1, -1])
+        self.n_implied_states = int(np.ceil(np.prod((high - low) / self.dt + 1)))
+
+
         # useful range is -1 .. +1, but spikes can be higher
         self.observation_space = spaces.Box(low, high)
 
@@ -116,7 +123,7 @@ class FlatWorld(gym.Env):
         options: Optional[dict] = None,
     ):
         
-        self.state = np.array([-1, -1])
+        self.state = self.init_state
         # reset the collected STL rho values
         self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
 
@@ -126,6 +133,9 @@ class FlatWorld(gym.Env):
     
     def get_state(self):
         return self.state
+    
+    def set_state(self, state):
+        self.state = state
         
     def label(self, state):
         signal, labels = {}, {}
@@ -145,13 +155,13 @@ class FlatWorld(gym.Env):
 
         if not self.continuous_actions:
             if action == 0:
-                u = np.array([[0, .5]])
+                u = np.array([[0, 1]])
             elif action == 1:
-                u = np.array([[.5, 0]])
+                u = np.array([[1, 0]])
             elif action == 2:
-                u = np.array([[0, -.5]])
+                u = np.array([[0, -1]])
             elif action == 3:
-                u = np.array([[-.5, 0]])
+                u = np.array([[-1, 0]])
             elif action == 4:
                 u = np.array([[0, 0]])
             else:
@@ -159,9 +169,9 @@ class FlatWorld(gym.Env):
         else:
             u = action
         
-        Δt = .4
-        A = np.eye(2)
-        B = np.eye(2) * Δt
+        dt = self.dt
+        A = self.A
+        B = self.B
         # action = np.clip(u, -1, +1).astype(np.float32)
         action = u
         info = self.get_info()

@@ -9,21 +9,21 @@ logger:
   dir_name: flatworld_stl
 ltl:
   autobuild: False
-  formula: "FGy"
+  formula: "FGg"
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 q_learning:
   batches_per_update: 5
   batch_size: 128
   update_freq__n_episodes: 1
-  init_temp: .3
+  init_temp: .5
   temp_decay_freq__n_episodes: 100
   temp_decay_rate: .9
   temp_decay_type: 'exponential'
-  min_action_temp: 0.05
-  lr: .00001
+  min_action_temp: 0.001
+  lr: .001
   iterations_per_target_update: 500
-  n_traj: 2000
+  n_traj: 10000
   T: 50
 testing:
   testing_freq__n_episodes: 25
