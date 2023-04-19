@@ -110,7 +110,7 @@ class Q_actual:
             # and case and or case are min and max, respectively
             phi_val = min(all_phi_vals) if cid == "&" else max(all_phi_vals)
             return phi_val
-        elif cid == "~":  # negation case
+        elif cid in ["~", "!"]:  # negation case
             phi_val = self.recurse_node(current_node.children[0], s, b, act, rhos, s_next, b_next)
             return -1 * phi_val
         else:  # G or E case: just get it by recursing with a single child
@@ -121,12 +121,15 @@ class Q_actual:
 
         ## originally: Q(s) ~=   min(r, gamma * max_{a'} Q(s', a')) 
         ## ours:       Q(s) ~=       r + gamma * max_{a'} Q(s', a')
-        q_action = self.Q[current_node.order, s_next, b_next, act]
+        try:
+            q_action = self.Q[current_node.order, s_next, b_next, act]
+        except:
+            import pdb; pdb.set_trace()
         
         if cid == "G":
             td_val = min(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order] = td_val
-        elif cid == "E":
+        elif cid == ["E", "F"]:
             td_val = max(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order] = td_val
         return phi_val
@@ -136,13 +139,15 @@ class Q_actual:
         queue = [self.stl_tree]
         num_temporal_ops = 0
         while len(queue) > 0:
-            curr = queue.pop()
+            curr = queue.pop(0)
             if curr.id != "rho":
                 num_expr += 1
                 # set the head that'll correspond to this operator
-                if curr.id in ["G", "E"]:
+                if curr.id in ["G", "E", "F"]:
+                    print(curr)
                     curr.set_ordering(num_temporal_ops)
                     num_temporal_ops += 1
+                    print(curr.order)
             for child in curr.children:
                 queue.append(child)
         return num_temporal_ops 

@@ -138,7 +138,7 @@ class STL_Q_learning():
             if curr.id != "rho":
                 num_expr += 1
                 # set the head that'll correspond to this operator
-                if curr.id in ["G", "E"]:
+                if curr.id in ["G", "E", "F"]:
                     curr.set_ordering(num_temporal_ops)
                     num_temporal_ops += 1
             for child in curr.children:
@@ -175,7 +175,7 @@ class STL_Q_learning():
         if cid == "G":
             td_val = torch.minimum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
-        elif cid == "E":
+        elif cid in ["E", "F"] :
             td_val = torch.maximum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
         return phi_val
@@ -300,7 +300,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
 
 def run_Q_STL(param, runner, env):
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
-    varphi = mtl.parse(param['ltl']['formula'])
+    # varphi = mtl.parse(param['ltl']['formula'])
     agent = STL_Q_learning(stl_tree, env.observation_space, env.action_space, env.mdp.rho_alphabet, param['gamma'], param)
     history = []
     success_history = []
@@ -313,7 +313,7 @@ def run_Q_STL(param, runner, env):
     for i_episode in tqdm(range(param['q_learning']['n_traj'])):
         # TRAINING
         all_rhos, max_q_val, t = rollout(env, agent, param, i_episode, runner, testing=False, visualize=((i_episode % 50) == 0))
-        stl_val = varphi(all_rhos)
+        stl_val = -100 #varphi(all_rhos)
 
         # Qs = agent.stl_q_net(torch.tensor(agent.buffer.states[agent.buffer.current_traj]).float(), torch.tensor(agent.buffer.buchis[agent.buffer.current_traj]).type(torch.int64).unsqueeze(1).unsqueeze(1))
         # pd.DataFrame(env.mdp.episode_rhos['y'])
