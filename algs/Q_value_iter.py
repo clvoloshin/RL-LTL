@@ -74,11 +74,9 @@ class Q_actual:
                             self.mapping[(s, b, a)] = (s__idx, b_, r)
                         
                         (s_, b_, rhos) = self.mapping[(s, b, a)]
-
                         Qs = self.Q[0, s_, b_, :]
                         max_actions = Qs.argmin() if self.outer_most_neg else Qs.argmax()
                         # max_actions = np.random.choice(np.flatnonzero(Qs == Qs.max()))
-
                         
                         self.reset_td_errors()
                         self.recurse_node(self.stl_tree, s, b, max_actions, rhos, s_, b_)
@@ -87,6 +85,8 @@ class Q_actual:
                             self.Q[head, s, b, a] = self.td_error_vector[head]
             
             if eps < 1e-3:
+                import pdb; pdb.set_trace()
+
                 break
             print(iter, eps)
             # print(iter, eps)
@@ -108,12 +108,16 @@ class Q_actual:
             for child in current_node.children:
                 all_phi_vals.append(self.recurse_node(child, s, b, act, rhos, s_next, b_next))
             # and case and or case are min and max, respectively
+            # if min(all_phi_vals) != all_phi_vals[0]:
+            # if s == 0:
+            #     if act != 0:
+            #         import pdb; pdb.set_trace()
             phi_val = min(all_phi_vals) if cid == "&" else max(all_phi_vals)
             return phi_val
         elif cid == "~":  # negation case
             phi_val = self.recurse_node(current_node.children[0], s, b, act, rhos, s_next, b_next)
             return -1 * phi_val
-        else:  # G or E case: just get it by recursing with a single child
+        else:  # G or E or X case: just get it by recursing with a single child
             phi_val = self.recurse_node(current_node.children[0], s, b, act, rhos, s_next, b_next)
         
         
@@ -129,6 +133,9 @@ class Q_actual:
         elif cid == "E":
             td_val = max(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order] = td_val
+        elif cid == "X":
+            td_val = self.gamma * q_action
+            self.td_error_vector[current_node.order] = td_val
         return phi_val
     
     def set_ordering(self):
@@ -140,11 +147,13 @@ class Q_actual:
             if curr.id != "rho":
                 num_expr += 1
                 # set the head that'll correspond to this operator
-                if curr.id in ["G", "E"]:
+                if curr.id in ["G", "E", "X"]:
                     curr.set_ordering(num_temporal_ops)
                     num_temporal_ops += 1
+                    print(curr.id, curr.order)
             for child in curr.children:
                 queue.append(child)
+        import pdb; pdb.set_trace()
         return num_temporal_ops 
 
 def rollout(agent, env, runner, T):
@@ -153,6 +162,7 @@ def rollout(agent, env, runner, T):
         for _  in range(T):
 
             Qs = agent.Q[0, s, b, :]
+            #agent.outer_most_neg = True
             a = Qs.argmin() if agent.outer_most_neg else Qs.argmax()
             s_, b_, rhos = agent.mapping[(s, b, a)]
             print(s, b, a, s_, b_)

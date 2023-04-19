@@ -109,7 +109,8 @@ class FlatWorld(gym.Env):
             # else:
             #     computed_rho = -1 * distance * 2 / normalization + 1
             if delta > 0:  # in [-1, 1]
-                computed_rho = delta / radius
+                computed_rho = 1
+                #computed_rho = delta / radius
             else:
                 computed_rho = delta / normalization
             all_robustness_vals[idx] = computed_rho

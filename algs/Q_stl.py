@@ -138,7 +138,7 @@ class STL_Q_learning():
             if curr.id != "rho":
                 num_expr += 1
                 # set the head that'll correspond to this operator
-                if curr.id in ["G", "E"]:
+                if curr.id in ["G", "E", "X"]:
                     curr.set_ordering(num_temporal_ops)
                     num_temporal_ops += 1
             for child in curr.children:
@@ -178,6 +178,9 @@ class STL_Q_learning():
         elif cid == "E":
             td_val = torch.maximum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
+        elif cid == "X":
+            td_val = self.gamma * q_action
+            self.td_error_vector[current_node.order] = td_val
         return phi_val
         
     
@@ -191,6 +194,7 @@ class STL_Q_learning():
         #TODO: finish
         total_loss = 0
         loss_func = torch.nn.SmoothL1Loss()
+        total_reward_loss = 0
         for k in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():

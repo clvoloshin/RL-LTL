@@ -44,6 +44,8 @@ def parse_helper(curr_phi):
     # match based on id
     if type(curr_phi) == ast.Neg:
         id = "~"
+    elif type(curr_phi) == ast.Next:
+        id = "X"
     elif type(curr_phi) == ast.WeakUntil:
         print("Support for Until is not ready!")
         raise NotImplementedError
