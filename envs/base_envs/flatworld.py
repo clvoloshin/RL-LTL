@@ -8,6 +8,7 @@ import gym.spaces as spaces
 
 import matplotlib
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import seaborn as sns
 
 from utls.plotutils import plotlive
@@ -112,7 +113,7 @@ class FlatWorld(gym.Env):
                 computed_rho = 1
                 #computed_rho = delta / radius
             else:
-                computed_rho = delta / normalization
+                computed_rho = -1 #delta / normalization
             all_robustness_vals[idx] = computed_rho
             self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
         return all_robustness_vals
@@ -175,14 +176,14 @@ class FlatWorld(gym.Env):
         B = self.B
         # action = np.clip(u, -1, +1).astype(np.float32)
         action = u
-        info = self.get_info()
+        
         self.timestep += 1
         self.state = A @ self.state.reshape(2, 1) + B @ action.reshape(2, 1)
         self.state = self.state.reshape(-1)
         self.state = np.clip(self.state, self.observation_space.low, self.observation_space.high)
         cost = np.linalg.norm(action)
         terminated = False
-        
+        info = self.get_info()
                   
 
         return self.state, cost, terminated, info

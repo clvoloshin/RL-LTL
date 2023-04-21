@@ -17,12 +17,12 @@ STL_IDS = ["G", "E", "&", "~", "|", "rho"]
 
 class STLNode():
     
-    def __init__(self, id: str, children, time_bounds: tuple=None, rho=None) -> None:
+    def __init__(self, id: str, children = [], time_bounds: tuple=None, rho=None) -> None:
         self.id = id
         self.children = children
         if self.id == "rho":
             assert len(self.children) == 0
-        elif self.id not in ["&", "|"]:
+        elif self.id not in ["&", "|", 'True', 'False']:
             # if it's not an 'and' or an 'or', it should only have one child
             assert len(self.children) == 1
         self.rho = rho
@@ -44,11 +44,11 @@ def parse_stl_into_tree(stl_formula):
     see https://github.com/mvcisback/py-metric-temporal-logic
     env: string
     '''
-    #phi = mtl.parse(stl_formula)
+    # phi = mtl.parse(stl_formula)
     parser = LTLfParser()
     phi = parser(stl_formula.replace("~", "!"))
     root = parse_helpers_ltlf(phi)
-    #root = parse_helper(phi)
+    # root = parse_helper(phi)
     return root
 
     #TODO: include time bounds from the formula if they exist
@@ -57,6 +57,12 @@ def parse_stl_into_tree(stl_formula):
 def parse_helpers_ltlf(phi):
     #TODO: include time bounds from the formula if they exist
     # match based on id
+    
+    if str(phi) in ["True", 'true']:
+        return STLNode('True') 
+    elif str(phi) in ["False", 'false']:
+        return STLNode('False') 
+
     members = phi._members()
 
     if len(members) == 1:

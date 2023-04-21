@@ -106,9 +106,9 @@ class Simulator(gym.Env):
         self.automaton.reset()
         if make_aut_init_state_random:
             self.automaton.set_state(np.random.choice(self.automaton.n_states - 1))
-        automaton_state = self.automaton.step(label)
+        automaton_state, edge = self.automaton.step(label)
 
-        return {'mdp': state, 'buchi': automaton_state}, {}
+        return {'mdp': state, 'buchi': automaton_state}, {'edge': edge}
 
         # one_hot = np.zeros(self.automaton.n_states)
         # one_hot[automaton_state] = 1.
@@ -169,14 +169,15 @@ class Simulator(gym.Env):
             state = self.mdp.get_state()
             label, _ = self.mdp.label(state)
             try:
-                automaton_state = self.automaton.epsilon_step(action - self.mdp.action_space.n) # discrete
+                automaton_state, edge = self.automaton.epsilon_step(action - self.mdp.action_space.n) # discrete
             except:
-                automaton_state = self.automaton.epsilon_step(action - 1) # continuous
+                automaton_state, edge = self.automaton.epsilon_step(action - 1) # continuous
 
-            automaton_state = self.automaton.step(label) # Do we take this step right now???
+            automaton_state, edge = self.automaton.step(label) # Do we take this step right now???
             cost = 0
             done = False
             info = self.mdp.get_info()
+            info.update({'edge': edge})
             # dic = {'state' : self.mdp.index_to_state(self.mdp.get_state())}
             # info = {'mdp_state': state, 'aut_state': automaton_state}
             # next_state = self.states.setdefault((state, automaton_state), len(self.states))
@@ -188,10 +189,10 @@ class Simulator(gym.Env):
             except:
                 state, cost, done, info = output
             label, _ = self.mdp.label(state)
-            automaton_state = self.automaton.step(label)
+            automaton_state, edge = self.automaton.step(label)
         
 
-        new_info = {'prev_mdp_state': current_mdp_state, 'prev_aut_state': current_aut_state , 's_': state, 'aut_state': automaton_state, 'label': label, 'is_accepting': automaton_state in self.automaton.automaton.accepting_states}
+        new_info = {'edge': edge, 'prev_mdp_state': current_mdp_state, 'prev_aut_state': current_aut_state , 's_': state, 'aut_state': automaton_state, 'label': label, 'is_accepting': automaton_state in self.automaton.automaton.accepting_states, 'is_rejecting': automaton_state == (self.automaton.automaton.n_states - 1)}
         try:
             new_info.update(info)
         except:

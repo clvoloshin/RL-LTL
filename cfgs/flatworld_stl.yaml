@@ -9,7 +9,7 @@ logger:
   dir_name: flatworld_stl
 ltl:
   autobuild: False
-  formula: "G(F(g) & ~b & ~y)"
+  formula: "G(F(g) & ~b & ~r & ~y)"
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 q_learning:
@@ -29,7 +29,7 @@ q_learning:
 testing:
   testing_freq__n_episodes: 25
   num_rollouts: 1
-gamma: .999
+gamma: .95
 n_grad_updates: 1
 delta: .1
 n_seeds: 10

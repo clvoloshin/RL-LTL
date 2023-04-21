@@ -13,29 +13,16 @@ import pandas as pd
 import wandb
 import scipy
 import PIL
-
-def BO(x, eps=0.):
-    # Boltzmann Operator
-    # https://en.wikipedia.org/wiki/Smooth_maximum#See_also
-    x = np.array(x)
-    return np.sum(x * np.exp(eps * x)) / np.sum(np.exp(eps * x))
-
-
-def softplus(x, eps=1.):
-    #softmax/softmin
-    return eps * scipy.special.logsumexp(np.array(x)/eps)
-
-def softminus(x, eps=1.):
-    return -softplus(-np.array(x))
-
+import networkx as nx
 
 class Q_actual:
-    def __init__(self, tree, rho_alphabet, n_states, env_space, act_space, gamma, param) -> None:
+    def __init__(self, reward_funcs, tree, rho_alphabet, n_states, env_space, act_space, gamma, param) -> None:
         self.stl_tree = tree
+        self.reward_funcs = reward_funcs
         self.rho_alphabet = rho_alphabet
         self.outer_most_neg = True if self.stl_tree.id in ["~", "!"] else False
         self.num_temporal_ops, self.ordering = self.set_ordering()
-        self.Q = ma.zeros((self.num_temporal_ops, n_states, env_space['buchi'].n, act_space['total']))
+        self.Q = ma.zeros((n_states, env_space['buchi'].n, act_space['total']))
         self.N = ma.zeros((self.num_temporal_ops, n_states, env_space['buchi'].n, act_space['total']))
         
         self.alpha = 1.
@@ -47,14 +34,13 @@ class Q_actual:
             # self.Q[head,...] = -1 if operator in ["F", "E"] else 1
         # self.Q += 1.
 
-
         # Mask actions not available
         for buchi in range(env_space['buchi'].n):
             try:
                 eps = act_space['total'] - 1 + act_space[buchi].n
             except:
                 eps = act_space['total'] - 1
-            self.Q[..., buchi, eps:] = ma.masked
+            self.Q[:, buchi, eps:] = ma.masked
             self.N[..., buchi, eps:] = ma.masked
         
         self.gamma = gamma
@@ -62,6 +48,22 @@ class Q_actual:
         self.mapping = {}
         self.states_to_idx = {}
         self.idx_to_states = {}
+    
+    def reward(self, env, rhos, edge, terminal, b, b_):
+        # # TODO: do this better??
+        
+
+        if terminal: #took sink
+            return -1, True
+        
+        if b in self.reward_funcs:
+            reward_func = self.reward_funcs[b][0]
+            r = self.recurse_node(reward_func.stl, None, None, None, rhos, None, None)
+            return r, False
+        else: # epsilon transition
+            return 0, False
+
+
     
     def value_iteration(self, env):  
         if len(self.idx_to_states) == 0:
@@ -73,11 +75,11 @@ class Q_actual:
         while iter < 1000:
             iter += 1
             eps = 0
-            for s in range(self.Q.shape[1]):
-                for b in range(self.Q.shape[2]):
-                    for a in range(self.Q.shape[3]):
+            for s in range(self.Q.shape[0]):
+                for b in range(self.Q.shape[1]):
+                    for a in range(self.Q.shape[2]):
                         try: 
-                            if self.Q[0, s, b, a].mask: 
+                            if self.Q[s, b, a].mask: 
                                 continue
                         except:
                             pass
@@ -88,6 +90,8 @@ class Q_actual:
                             s_ = np.round(next_state['mdp'], 3)
                             b_ = next_state['buchi']
                             r = info['rho']
+                            edge = info['edge']
+                            terminal = info['is_rejecting']
 
                             if tuple(s_) not in self.states_to_idx:
                                 idx_ = len(self.idx_to_states)
@@ -96,22 +100,20 @@ class Q_actual:
                             
                             s__idx = self.states_to_idx[tuple(s_)]
 
-                            self.mapping[(s, b, a)] = (s__idx, b_, r)
+                            self.mapping[(s, b, a)] = (s__idx, b_, r, edge, terminal)
                         
-                        (s_, b_, rhos) = self.mapping[(s, b, a)]
-                        Qs = self.Q[0, s_, b_, :]
-                        max_actions = Qs.argmin() if self.outer_most_neg else Qs.argmax()
-                        # max_actions = np.random.choice(np.flatnonzero(Qs == Qs.max()))
-                        
-                        self.reset_td_errors()
-                        self.recurse_node(self.stl_tree, s, b, max_actions, rhos, s_, b_)
-                        for head in range(len(self.td_error_vector)):
-                            eps += np.abs(self.Q[head, s, b, a] - self.td_error_vector[head])
-                            self.Q[head, s, b, a] = (1-self.alpha) * self.Q[head, s, b, a] + self.alpha * self.td_error_vector[head]
-            
+                        (s_, b_, rhos, edge, terminal) = self.mapping[(s, b, a)]
+
+                        r, done = self.reward(env, rhos, edge, terminal, b, b_)
+
+                        # if r > 0: import pdb; pdb.set_trace()
+                        target = (r + self.gamma * self.Q[s_, b_, :].max()) * (1-done) + done * r/(1-self.gamma)
+                        eps += np.abs(self.Q[s, b, a] - target)
+                        self.Q[s, b, a] = self.Q[s, b, a] * (1-self.alpha) + self.alpha * target
+
             if eps < 1e-3:
                 break
-            print(iter, eps, self.Q[0, 0, 0, :].argmax())
+            print(iter, eps, self.Q[0, 0, :].argmax())
             # print(iter, eps)
         
         # self.rollout(30)
@@ -123,7 +125,11 @@ class Q_actual:
 
     def recurse_node(self, current_node, s, b, act, rhos, s_next, b_next):
         cid = current_node.id
-        if cid == "rho":
+        if cid == 'True':
+            return 1
+        elif cid == 'False':
+            return -1
+        elif cid == "rho":
             # evaluate the robustness function using the rho belonging to that node
             phi_val = rhos[self.rho_alphabet.index(current_node.rho)]
             return phi_val
@@ -183,14 +189,15 @@ class Q_actual:
         return num_temporal_ops, order
 
 def rollout(agent, env, runner, T):
-    s, b = 0, 0
+    output, _ = env.reset()
+    s, b = agent.states_to_idx[tuple(output['mdp'])], output['buchi']
     states = [agent.idx_to_states[s]]
     for _  in range(T):
 
-        Qs = agent.Q[0, s, b, :]
+        Qs = agent.Q[s, b, :]
         # agent.outer_most_neg = True
         a = Qs.argmin() if agent.outer_most_neg else Qs.argmax()
-        s_, b_, rhos = agent.mapping[(s, b, a)]
+        s_, b_, rhos, edge, terminal = agent.mapping[(s, b, a)]
         print(s, b, a, s_, b_)
         print(Qs)
         print(agent.idx_to_states[s], agent.idx_to_states[s_])
@@ -204,7 +211,31 @@ def rollout(agent, env, runner, T):
 
 def run_value_iter(param, runner, env, second_order = False):
     
+    
+    
+    for path in sorted(nx.simple_cycles(env.automaton.automaton.G)):
+        print(path)
+    
+    ## G(F(g) & ~b & ~r & ~y)
+    reward_funcs = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
+    
+    ## G(F(y & XFr)) & G~b
+    # reward_funcs = {0: [env.automaton.edges(0, 1)[0]], 1: [env.automaton.edges(1, 2)[0]], 2: [env.automaton.edges(2, 0)[0]]}
+    
+    ## F(G(y))
+    # reward_funcs = {1: [env.automaton.edges(1, 1)[0]]}
+    
+    ## F(r & XF(G(y)))
+    # reward_funcs = {2: [env.automaton.edges(2, 2)[0]]}  
+
+    ## F(r & XF(g & XF(y))) & G~b
+    # reward_funcs = {2: [env.automaton.edges(2, 3)[0]], 3: [env.automaton.edges(3, 1)[0]], 1: [env.automaton.edges(1, 0)[0]], 0: [env.automaton.edges(0, 0)[0]]}  
+    # reward_funcs = {0: [env.automaton.edges(0, 0)[0]]}
+
+    
+
+    # print(reward_funcs)
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
-    agent = Q_actual(stl_tree, env.mdp.rho_alphabet, env.mdp.n_implied_states, env.observation_space, env.action_space, param['gamma'], param)
+    agent = Q_actual(reward_funcs, stl_tree, env.mdp.rho_alphabet, env.mdp.n_implied_states, env.observation_space, env.action_space, param['gamma'], param)
     agent.value_iteration(env)
     rollout(agent, env, runner, 30)
