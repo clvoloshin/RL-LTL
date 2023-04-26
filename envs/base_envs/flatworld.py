@@ -77,7 +77,8 @@ class FlatWorld(gym.Env):
         # self.goal = np.array([1, 1, .2])
         self.obs_1 = np.array([.9/2, -1.5/2., .3])     # red box in bottom right corner
         self.obs_2 = np.array([.9/2, 1., .3])        # green box in top right corner
-        self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
+        #self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
+        self.obs_3 = np.array([0, -2.7/2, 0.35])      # blue circle for REWARD offset from center.
         self.obs_4 = np.array([-1.7/2, .3/2, .3])    # orange box on the left
         
         self.timestep = 0  # set time to keep count of STL values
@@ -117,6 +118,15 @@ class FlatWorld(gym.Env):
             all_robustness_vals[idx] = computed_rho
             self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
         return all_robustness_vals
+
+    def custom_reward(self):
+        for circle, color in self.circles:
+            val = np.linalg.norm(self.state - circle[:-1])
+            if val < circle[-1]:
+                if color == 'b':
+                    return 1
+        return -0.2
+        
     
     def reset(
         self,
@@ -182,11 +192,12 @@ class FlatWorld(gym.Env):
         self.state = self.state.reshape(-1)
         self.state = np.clip(self.state, self.observation_space.low, self.observation_space.high)
         cost = np.linalg.norm(action)
+        reward = self.custom_reward()
         terminated = False
         info = self.get_info()
                   
 
-        return self.state, cost, terminated, info
+        return self.state, reward, terminated, info
 
     def get_info(self):
         return {"rho": self.compute_rho()}

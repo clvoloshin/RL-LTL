@@ -419,9 +419,9 @@ class Automaton(object):
                         dst_node.add_parent(edge)
                     else:
                         print('Edge Deleted: ', edge)
-                    self.G.add_edge(src.id, dst_node.id, edge = edge)
+                    self.G.add_edge(src.id, dst_node.id, edge = edge, condition = condition)
                     
-        
+
         self.n_states = len(self.states)
         self.start_state = atm.get_init_state_number()
 

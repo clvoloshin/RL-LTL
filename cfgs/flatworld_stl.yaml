@@ -9,7 +9,7 @@ logger:
   dir_name: flatworld_stl
 ltl:
   autobuild: False
-  formula: "G(F(g) & ~b & ~r & ~y)"
+  formula: "F(r & XF(G(y)))"
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 q_learning:
