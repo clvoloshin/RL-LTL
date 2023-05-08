@@ -16,18 +16,20 @@ import PIL
 import networkx as nx
 
 class Q_actual:
-    def __init__(self, reward_funcs, tree, rho_alphabet, n_states, env_space, act_space, gamma, param) -> None:
+    def __init__(self, reward_funcs, tree, rho_alphabet, n_states, env_space, act_space, gamma, accepting_states, param) -> None:
         self.stl_tree = tree
         self.reward_funcs = reward_funcs
-        self.lambda_penalties = {bstate: 1 for bstate in range(env_space['buchi'].n)}
+        self.lambda_penalties = {bstate: 10 for bstate in range(env_space['buchi'].n)}
         self.lambda_multiplier = 1.5  # TODO: figure out how to set this hyperparam?
         self.rho_alphabet = rho_alphabet
+        self.max_lambda_updates = 5  # TODO: find a better way of evaluating empirical satisfaction
         self.outer_most_neg = True if self.stl_tree.id in ["~", "!"] else False
         self.num_temporal_ops, self.ordering = self.set_ordering()
         self.Q = ma.zeros((n_states, env_space['buchi'].n, act_space['total']))
         self.N = ma.zeros((self.num_temporal_ops, n_states, env_space['buchi'].n, act_space['total']))
         self.outer_target = ma.zeros((n_states, env_space['buchi'].n, act_space['total']))
         self.alpha = 1.
+        self.accepting_states = accepting_states
 
         # Instantiate bias
         # for head in range(self.num_temporal_ops):
@@ -51,7 +53,14 @@ class Q_actual:
         self.states_to_idx = {}
         self.idx_to_states = {}
     
-    def reward(self, env, rhos, edge, terminal, b, b_):
+    def ltl_reward_1(self, env, rhos, edge, terminal, b, b_):
+        if terminal: #took sink
+            return 0, True
+        if b_ in self.accepting_states:
+            return 1, False
+        return 0, False
+    
+    def ltl_reward_3(self, env, rhos, edge, terminal, b, b_):
         # # TODO: do this better??
         
 
@@ -64,47 +73,29 @@ class Q_actual:
             return r, False
         else: # epsilon transition
             return 0, False
-
+    
     def constrained_reward(self, env, rhos, edge, terminal, b, b_, mdp_reward):
-        ltl_reward, done = self.reward(env, rhos, edge, terminal, b, b_)
+        # we can replace the ltl reward call with whatever reward structure we want
+        ltl_reward, done = self.ltl_reward_1(env, rhos, edge, terminal, b, b_)
         edge_lambda = self.lambda_penalties[b]
             #return ltl_reward, done
         return mdp_reward + edge_lambda * ltl_reward, done
         
-    def update_lambdas(self, change_threshold=2):
-        no_change = True
+    def update_lambdas(self):
         for b in self.lambda_penalties:
-            # collect difference in policies
-            # num_changes = 0
-            # for s in range(self.Q.shape[0]):
-            #     for a in range(self.Q.shape[2]):
-            #         try: 
-            #             if self.Q[s, b, a].mask: 
-            #                 continue
-            #         except:
-            #             pass
-            #         if np.argmax(self.Q[s, b, :]) != np.argmax(self.outer_target[s, b, :]):
-            #             num_changes += 1
-            # print("NUM CHANGES IS {}".format(num_changes))
-            # #import pdb; pdb.set_trace()
-            # if num_changes > change_threshold:
-            #     no_change = False
-                #self.lambda_penalties[b] *= self.lambda_multiplier
             self.lambda_penalties[b] *= self.lambda_multiplier
             self.outer_target[:, b, :] = self.Q[:, b, :]
-        return no_change
 
     def constrained_optimization(self, env):
         # outer loop
         # termination conditions: we satisfy the spec, and there's no change in the policy
-        no_change = False
         itr = 0
-        while itr < 50:
+        while itr < self.max_lambda_updates:
             print("=" * 10, " OUTER LOOP ITER {}".format(itr), "=" * 10)
             self.value_iteration(env)
-            satisfied = self.single_rollout(env)
-            no_change = self.update_lambdas()
-            if satisfied: # we are satisfying the spec so done
+            emp_sat = self.empirical_satisfaction(env)
+            self.update_lambdas()
+            if emp_sat: # we are satisfying the spec so done
                 break
             itr += 1
         
@@ -112,6 +103,7 @@ class Q_actual:
         output, _ = env.reset()
         s, b = self.states_to_idx[tuple(output['mdp'])], output['buchi']
         states = [self.idx_to_states[s]]
+        num_accepting_visits = 0
         for _  in range(30):
 
             Qs = self.Q[s, b, :]
@@ -119,16 +111,25 @@ class Q_actual:
             #import pdb; pdb.set_trace()
             a = Qs.argmin() if self.outer_most_neg else Qs.argmax()
             s_, b_, rew, rhos, edge, terminal = self.mapping[(s, b, a)]
-            #print(s, b, a, s_, b_)
-            #print(Qs)
-            #print(self.idx_to_states[s], self.idx_to_states[s_])
             states.append(self.idx_to_states[s_])
             s = s_
             b = b_
-        import pdb; pdb.set_trace()
-        if b in env.automaton.accepting_sets:
-            return True
-        return False
+            if b in env.automaton.accepting_sets:
+                num_accepting_visits += 1
+        return num_accepting_visits, b
+    
+    def empirical_satisfaction(self, env, num_trajectories=1, min_num_accept_visits=1):
+        # determine if the trajectory has at least 'empirically' satisfied spec
+        sat = True
+        for _ in range(num_trajectories):
+            num_accept_visits, curr_b = self.single_rollout(env)
+            if num_accept_visits < min_num_accept_visits:
+                sat = False
+                break
+            if curr_b not in self.reward_funcs:
+                sat = False
+                break
+        return sat
                         
     def value_iteration(self, env):  
         if len(self.idx_to_states) == 0:
@@ -296,14 +297,14 @@ def run_value_iter(param, runner, env, second_order = False):
     #reward_funcs = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
     
     ## G(F(y & X(F(r)))) & G~b
-    #reward_funcs = {0: [env.automaton.edges(0, 1)[0]], 1: [env.automaton.edges(1, 2)[0]], 2: [env.automaton.edges(2, 0)[0]]}
+    reward_funcs = {0: [env.automaton.edges(0, 1)[0]], 1: [env.automaton.edges(1, 2)[0]], 2: [env.automaton.edges(2, 0)[0]]}
     #import pdb; pdb.set_trace()
     ## F(G(y))
     #reward_funcs = {1: [env.automaton.edges(1, 1)[0]]}
     
     ## F(r & XF(G(y)))
-    reward_funcs = {2: [env.automaton.edges(2, 2)[0]]}  
-    import pdb; pdb.set_trace()
+    #reward_funcs = {2: [env.automaton.edges(2, 2)[0]]}  
+    #import pdb; pdb.set_trace()
     ## F(r & XF(g & XF(y))) & G~b
     #reward_funcs = {2: [env.automaton.edges(2, 3)[0]], 3: [env.automaton.edges(3, 1)[0]], 1: [env.automaton.edges(1, 0)[0]], 0: [env.automaton.edges(0, 0)[0]]}  
     # reward_funcs = {0: [env.automaton.edges(0, 0)[0]]}
@@ -312,7 +313,8 @@ def run_value_iter(param, runner, env, second_order = False):
 
     # print(reward_funcs)
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
-    agent = Q_actual(reward_funcs, stl_tree, env.mdp.rho_alphabet, env.mdp.n_implied_states, env.observation_space, env.action_space, param['gamma'], param)
+    agent = Q_actual(reward_funcs, stl_tree, env.mdp.rho_alphabet, env.mdp.n_implied_states, env.observation_space, env.action_space, param['gamma'],
+                     env.automaton.accepting_sets, param)
     #agent.value_iteration(env)
     agent.constrained_optimization(env)
     rollout(agent, env, runner, 30)

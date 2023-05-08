@@ -77,15 +77,16 @@ class FlatWorld(gym.Env):
         # self.goal = np.array([1, 1, .2])
         self.obs_1 = np.array([.9/2, -1.5/2., .3])     # red box in bottom right corner
         self.obs_2 = np.array([.9/2, 1., .3])        # green box in top right corner
-        #self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
-        self.obs_3 = np.array([0, -2.7/2, 0.35])      # blue circle for REWARD offset from center.
+        self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
+        #self.obs_3 = np.array([0, -2.7/2, 0.35])      # blue circle for REWARD offset from center.
         self.obs_4 = np.array([-1.7/2, .3/2, .3])    # orange box on the left
-        
+        self.obs_5 = np.array([0, -2.7/2, 0.35])     # reward region: purple
+        self.obs_6 = np.array([-2.7/2, 2.7/2, 0.35]) # reward region: 
         self.timestep = 0  # set time to keep count of STL values
         
-        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b'), (self.obs_5, 'm'), (self.obs_6, 'c')]
         #self.circles = [(self.obs_2, 'y'), (self.obs_3, 'b')]
-        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3}
+        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3, 'm': self.obs_5, 'c': self.obs_6}
         self.rho_alphabet = list(self.circles_map.keys())
 
         self.state = np.array([-1, -1])
@@ -114,7 +115,7 @@ class FlatWorld(gym.Env):
                 computed_rho = 1
                 #computed_rho = delta / radius
             else:
-                computed_rho = -1 #delta / normalization
+                computed_rho = 0 #delta / normalization
             all_robustness_vals[idx] = computed_rho
             self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
         return all_robustness_vals
@@ -123,9 +124,9 @@ class FlatWorld(gym.Env):
         for circle, color in self.circles:
             val = np.linalg.norm(self.state - circle[:-1])
             if val < circle[-1]:
-                if color == 'b':
+                if color == 'm' or color == 'c':
                     return 1
-        return -0.2
+        return 0.0  # previously was a small negative number
         
     
     def reset(
