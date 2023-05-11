@@ -8,6 +8,8 @@ from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_stl import run_Q_STL
 from algs.Q_value_iter_2 import run_value_iter
+from algs.constrained_opt import ConstrainedOptimization
+from algs.ppo_continuous import run_ppo_continuous
 ROOT = Path(__file__).parent
 
 @hydra.main(config_path=str(ROOT / "cfgs"))
@@ -21,6 +23,7 @@ def main(cfg):
     sim = Simulator(env, automaton)
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True)) as run:
         # run_Q_STL(cfg, run, sim)
+        copt = ConstrainedOptimization(cfg, run, sim)
         run_value_iter(cfg, run, sim)
     print(cfg)
 
