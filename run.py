@@ -3,13 +3,13 @@ from pathlib import Path
 import wandb
 import torch
 import numpy as np
-from omegaconf import OmegaConf
+from omegaconf import OmegaConfget
 from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_stl import run_Q_STL
 ROOT = Path(__file__).parent
 
-@hydra.main(config_path="./cfgs")
+@hydra.main(config_path=str(ROOT/"cfgs")) #, config_name="flatworld_stl")
 def main(cfg):
     np.random.seed(cfg.init_seed)
     seeds = [np.random.randint(1e6) for _ in range(cfg.n_seeds)]
