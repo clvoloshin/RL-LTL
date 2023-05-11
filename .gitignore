@@ -1,0 +1,18 @@
+**.pyc
+
+# results
+/experiments
+/outputs
+
+# third party libraries
+/lib
+/rabinizer4
+/spot-2.11.3
+/wandb
+/share
+/bin
+/include
+/__pycache__
+/__MACOSX
+
+/ltl-env
