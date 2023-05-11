@@ -26,8 +26,6 @@ def main(cfg):
         copt = ConstrainedOptimization(cfg, run, sim)
         run_value_iter(cfg, run, sim)
     print(cfg)
-
-
 if __name__ == "__main__":
     main()
 
