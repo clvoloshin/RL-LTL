@@ -9,6 +9,7 @@ from utls.plotutils import plot_something_live
 import numpy as np
 from policies.actor_critic import RolloutBuffer, ActorCritic
 import time
+import wandb
 from tqdm import tqdm
 
 ################################## set device ##################################
@@ -86,19 +87,23 @@ class PPO:
         print(f'Setting temperature: {self.temp}')
         self.set_action_std(self.temp)
     
-    def update(self):
+    def update(self, constrained_rew_fxn):
         self.num_updates_called += 1
 
         # Optimize policy for K epochs
         for k in range(self.K_epochs):
 
             # Get data from random reward-ful trajectories
-            old_states, old_buchis, old_actions, rewards, old_action_idxs, old_logprobs = self.buffer.get_torch_data(self.gamma, self.batch_size)
+            old_states, old_buchis, old_actions, old_next_buchis, rewards, old_action_idxs, old_logprobs = self.buffer.get_torch_data(self.gamma, self.batch_size)
             if len(old_states) == 0:
                 # No signal available
                 self.buffer.clear()
                 return
-
+            # use constrained optimization to modify the reward based on current lambda
+            #TODO: support other LTL reward types instead of just one
+            #TODO: fix return type and function signature of this?
+            rewards, _ = constrained_rew_fxn(None, None, old_buchis, old_next_buchis, rewards)
+            
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_buchis, old_actions, old_action_idxs)
 
@@ -142,7 +147,7 @@ class PPO:
         self.buffer.clear()
     
 
-def rollout(env, agent, param, i_episode, testing=False, visualize=False):
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
     states, buchis = [], []
     state, _ = env.reset()
     states.append(state['mdp'])
@@ -203,11 +208,12 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
         state = next_state
 
     if visualize:
-        try:
-            env.render(states=env.unnormalize(states), save_dir=logger.get_dir() + '/' + "episode_" + str(i_episode))
-        except:
-            pass
-
+        # frames = 
+        # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
+        if testing: 
+            runner.log({"testing": wandb.Image(env.render(states=states, save_dir=None))})
+        else:
+            runner.log({"training": wandb.Image(env.render(states=states, save_dir=None))})
     # print('Get Experience', total_experience_time)
     # print('Get Action', total_action_time)
     print(next_state['mdp'])
@@ -219,7 +225,7 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     print(action)
     return ep_reward, disc_ep_reward, t
         
-def run_ppo_continuous(param, env, second_order = False, to_hallucinate=False):
+def run_ppo_continuous(param, env, constrained_rew_fxn, runner, second_order = False, to_hallucinate=False):
     
     agent = PPO(env.observation_space, env.action_space, param['gamma'], param, to_hallucinate)
     fig, axes = plt.subplots(2, 1)
@@ -233,13 +239,13 @@ def run_ppo_continuous(param, env, second_order = False, to_hallucinate=False):
 
         # Get trajectory
         # tic = time.time()
-        ep_reward, disc_ep_reward, t = rollout(env, agent, param, i_episode, testing=False)
+        ep_reward, disc_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
 
         # update weights
         # tic = time.time()
-        agent.update()
+        agent.update(constrained_rew_fxn)
         # toc2 = time.time() - tic
         # print(toc, toc2)
         
@@ -258,7 +264,7 @@ def run_ppo_continuous(param, env, second_order = False, to_hallucinate=False):
             # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
             success_history += [test_data[:, 0].mean()]
             disc_success_history += [test_data[:, 1].mean()]
-            method = 'Ours' if to_hallucinate else 'Baseline'
+            method = "PPO"
             plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
             logger.logkv('Iteration', i_episode)
             logger.logkv('Method', method)

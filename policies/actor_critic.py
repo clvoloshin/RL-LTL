@@ -43,7 +43,7 @@ class Trajectory:
         self.next_states.append(s_)
         self.next_buchis.append(b_)
         self.actions.append(a if not is_eps else self.action_placeholder)
-        self.rewards.append(r if r >= 0 else 0)
+        self.rewards.append(r)  # want this to hold the original MDP reward
         self.has_reward = self.has_reward or (r > 0)
         self.done = self.done or (r < 0)
         self.is_eps.append(is_eps)
@@ -192,6 +192,7 @@ class RolloutBuffer:
         all_rewards = []
         all_action_idxs = []
         all_logprobs = []
+        all_next_buchis = []
         # all_dones = []
         for X in [self.all_reward_trajectories, self.all_no_reward_trajectories]:
             try:
@@ -211,10 +212,12 @@ class RolloutBuffer:
                 all_action_idxs += traj.act_idxs
                 all_logprobs += traj.logprobs
                 all_buchis += traj.buchis
+                all_next_buchis += traj.next_buchis
                 # all_dones += traj.dones
         
         all_states = torch.squeeze(torch.tensor(np.array(all_states))).detach().to(device).type(torch.float)
         all_buchis = torch.squeeze(torch.tensor(np.array(all_buchis))).detach().to(device).type(torch.int64).unsqueeze(1).unsqueeze(1)
+        all_next_buchis = torch.squeeze(torch.tensor(np.array(all_next_buchis))).detach().to(device).type(torch.int64).unsqueeze(1).unsqueeze(1)
         all_action_idxs = torch.squeeze(torch.tensor(np.array(all_action_idxs))).detach().to(device).type(torch.int64)
         all_actions = torch.squeeze(torch.tensor(np.array(all_actions))).detach().to(device)
         all_logprobs = torch.squeeze(torch.tensor(all_logprobs)).detach().to(device)
@@ -222,7 +225,7 @@ class RolloutBuffer:
         # all_dones = torch.tensor(np.array(all_dones), dtype=torch.float32).to(device)
         # all_rewards = (all_rewards - all_rewards.mean()) / (all_rewards.std() + 1e-7)
 
-        return all_states, all_buchis, all_actions, all_rewards, all_action_idxs, all_logprobs#, all_dones
+        return all_states, all_buchis, all_actions, all_next_buchis, all_rewards, all_action_idxs, all_logprobs#, all_dones
 
     def get_states(self):
         all_states = []
