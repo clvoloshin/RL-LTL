@@ -62,8 +62,6 @@ class Q_actual:
     
     def ltl_reward_3(self, env, rhos, edge, terminal, b, b_):
         # # TODO: do this better??
-        
-
         if terminal: #took sink
             return -1, True
         
