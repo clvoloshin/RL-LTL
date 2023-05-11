@@ -4,14 +4,14 @@ import wandb
 import torch
 import numpy as np
 from omegaconf import OmegaConf
- from envs.abstract_env import Simulator
- from automaton import Automaton, AutomatonRunner
- from algs.Q_stl import run_Q_STL
- from algs.Q_value_iter import run_value_iter
- from algs.Q_value_iter_2 import run_value_iter
- ROOT = Path(__file__).parent
+from envs.abstract_env import Simulator
+from automaton import Automaton, AutomatonRunner
+from algs.Q_stl import run_Q_STL
+from algs.Q_value_iter import run_value_iter
+from algs.Q_value_iter_2 import run_value_iter
+ROOT = Path(__file__).parent
 
- @hydra.main(config_path=str(ROOT / "cfgs"))
+@hydra.main(config_path=str(ROOT / "cfgs"))
 def main(cfg):
     np.random.seed(cfg.init_seed)
     seeds = [np.random.randint(1e6) for _ in range(cfg.n_seeds)]
@@ -24,6 +24,7 @@ def main(cfg):
         # run_Q_STL(cfg, run, sim)
         run_value_iter(cfg, run, sim)
     print(cfg)
+    
 if __name__ == "__main__":
     main()
 
