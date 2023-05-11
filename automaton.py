@@ -15,8 +15,11 @@ import os
 import random
 import re
 from itertools import chain, combinations
+from utls.utls import parse_stl_into_tree
+import networkx as nx
 
-# from helpers.str_utils import remove_from_str
+# from helpers.str_utils import remove_fr
+# ls import parse_stl_into_treeom_str
 # from interfaces.automata import Label, LABEL_TRUE
 # from interfaces.expr import Signal
 
@@ -100,6 +103,11 @@ class AutomatonEdge(object):
 
         self.finite = set()
         self.infinite = set()
+        try:
+            self.stl = parse_stl_into_tree(str(self.condition))
+        except:
+            import pdb; pdb.set_trace()
+            parse_stl_into_tree(str(self.condition))
     
     def set_accepting(self, i, fin_or_inf):
         if fin_or_inf:
@@ -198,6 +206,7 @@ class Automaton(object):
         # aut = spot.postprocess(aut, 'sbacc')
         self.accepting_states = set()
         
+        self.G = nx.DiGraph()
         self.parse(aut)
     
     def build_formula(self, formula, autobuild):
@@ -410,7 +419,9 @@ class Automaton(object):
                         dst_node.add_parent(edge)
                     else:
                         print('Edge Deleted: ', edge)
-        
+                    self.G.add_edge(src.id, dst_node.id, edge = edge, condition = condition)
+                    
+
         self.n_states = len(self.states)
         self.start_state = atm.get_init_state_number()
 
@@ -465,7 +476,7 @@ class AutomatonRunner(object):
     def epsilon_step(self, action):
         try:
             self.current_state = self.automaton.eps[self.current_state][action]
-            return self.current_state
+            return self.current_state, -1
         except:
             assert 'This epsilon step doesnt exist, (q,e) = (%s, %s)' % (self.current_state, action)
         
@@ -478,18 +489,18 @@ class AutomatonRunner(object):
             edge = self.edges_visited[dict_hash]
             assert edge.truth(state)
             self.current_state = edge.child.id
-            return self.current_state
+            return self.current_state, edge
 
         for edge in self.edges():
             if edge.truth(state):
                 self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
                 self.current_state = edge.child.id
-                return self.current_state
+                return self.current_state, edge
         
         # else: sink
         # self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
         self.current_state = self.n_states - 1
-        return self.current_state
+        return self.current_state, None
 
     def edges(self, start=None, end=None):
         if (start is None) and (end is None):

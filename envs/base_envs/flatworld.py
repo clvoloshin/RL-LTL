@@ -8,6 +8,7 @@ import gym.spaces as spaces
 
 import matplotlib
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import seaborn as sns
 
 from utls.plotutils import plotlive
@@ -51,6 +52,13 @@ class FlatWorld(gym.Env):
             ]
         ).astype(np.float32)
 
+        self.dt = .2
+        self.A = np.eye(2)
+        self.B = np.eye(2) * self.dt
+        self.init_state =  np.array([-1, -1])
+        self.n_implied_states = int(np.ceil(np.prod((high - low) / self.dt + 1)))
+
+
         # useful range is -1 .. +1, but spikes can be higher
         self.observation_space = spaces.Box(low, high)
 
@@ -70,13 +78,15 @@ class FlatWorld(gym.Env):
         self.obs_1 = np.array([.9/2, -1.5/2., .3])     # red box in bottom right corner
         self.obs_2 = np.array([.9/2, 1., .3])        # green box in top right corner
         self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
+        #self.obs_3 = np.array([0, -2.7/2, 0.35])      # blue circle for REWARD offset from center.
         self.obs_4 = np.array([-1.7/2, .3/2, .3])    # orange box on the left
-        
+        self.obs_5 = np.array([0, -2.7/2, 0.35])     # reward region: purple
+        self.obs_6 = np.array([-2.7/2, 2.7/2, 0.35]) # reward region: 
         self.timestep = 0  # set time to keep count of STL values
         
-        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b'), (self.obs_5, 'm'), (self.obs_6, 'c')]
         #self.circles = [(self.obs_2, 'y'), (self.obs_3, 'b')]
-        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3}
+        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3, 'm': self.obs_5, 'c': self.obs_6}
         self.rho_alphabet = list(self.circles_map.keys())
 
         self.state = np.array([-1, -1])
@@ -102,12 +112,22 @@ class FlatWorld(gym.Env):
             # else:
             #     computed_rho = -1 * distance * 2 / normalization + 1
             if delta > 0:  # in [-1, 1]
-                computed_rho = delta / radius
+                computed_rho = 1
+                #computed_rho = delta / radius
             else:
-                computed_rho = delta / normalization
+                computed_rho = 0 #delta / normalization
             all_robustness_vals[idx] = computed_rho
             self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
         return all_robustness_vals
+
+    def custom_reward(self):
+        for circle, color in self.circles:
+            val = np.linalg.norm(self.state - circle[:-1])
+            if val < circle[-1]:
+                if color == 'm' or color == 'c':
+                    return 1
+        return 0.0  # previously was a small negative number
+        
     
     def reset(
         self,
@@ -116,7 +136,7 @@ class FlatWorld(gym.Env):
         options: Optional[dict] = None,
     ):
         
-        self.state = np.array([-1, -1])
+        self.state = self.init_state
         # reset the collected STL rho values
         self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
 
@@ -126,6 +146,9 @@ class FlatWorld(gym.Env):
     
     def get_state(self):
         return self.state
+    
+    def set_state(self, state):
+        self.state = state
         
     def label(self, state):
         signal, labels = {}, {}
@@ -145,13 +168,13 @@ class FlatWorld(gym.Env):
 
         if not self.continuous_actions:
             if action == 0:
-                u = np.array([[0, .5]])
+                u = np.array([[0, 1]])
             elif action == 1:
-                u = np.array([[.5, 0]])
+                u = np.array([[1, 0]])
             elif action == 2:
-                u = np.array([[0, -.5]])
+                u = np.array([[0, -1]])
             elif action == 3:
-                u = np.array([[-.5, 0]])
+                u = np.array([[-1, 0]])
             elif action == 4:
                 u = np.array([[0, 0]])
             else:
@@ -159,22 +182,23 @@ class FlatWorld(gym.Env):
         else:
             u = action
         
-        Δt = .4
-        A = np.eye(2)
-        B = np.eye(2) * Δt
+        dt = self.dt
+        A = self.A
+        B = self.B
         # action = np.clip(u, -1, +1).astype(np.float32)
         action = u
-        info = self.get_info()
+        
         self.timestep += 1
         self.state = A @ self.state.reshape(2, 1) + B @ action.reshape(2, 1)
         self.state = self.state.reshape(-1)
         self.state = np.clip(self.state, self.observation_space.low, self.observation_space.high)
         cost = np.linalg.norm(action)
+        reward = self.custom_reward()
         terminated = False
-        
+        info = self.get_info()
                   
 
-        return self.state, cost, terminated, info
+        return self.state, reward, terminated, info
 
     def get_info(self):
         return {"rho": self.compute_rho()}

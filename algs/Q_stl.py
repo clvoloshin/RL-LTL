@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from utls.plotutils import plot_something_live
 import numpy as np
 from utls.utls import STL_IDS, STLNode, parse_stl_into_tree
-from policies.dqn import BufferSTL, DQNSTL
+from policies.dqn import BufferSTL, DQNSTL, DQN
 import wandb
 from pathlib import Path
 from tqdm import tqdm
@@ -29,16 +29,27 @@ class STL_Q_learning():
         # needs to be in parsable form - follow the above format for now with STLNodes
         self.stl_tree = stl_tree
         self.num_temporal_ops = self.set_ordering()
+        self.outermost_negative = False
+        if self.stl_tree.id == "~":  # outermost negative that we need to be considering in the policy!
+            self.outermost_negative = True
         # shared parameters across all heads
-        self.stl_q_net = DQNSTL(env_space, act_space, param, self.num_temporal_ops)
-        self.stl_q_target = DQNSTL(env_space, act_space, param, self.num_temporal_ops)
+        self.stl_q_net = DQNSTL(env_space, act_space, param, self.num_temporal_ops, self.outermost_negative)
+        self.stl_q_target = DQNSTL(env_space, act_space, param, self.num_temporal_ops, self.outermost_negative)
+        
+        self.reward_q_net = DQN(env_space, act_space, param)
+        self.reward_q_target = DQN(env_space, act_space, param)
         all_params = []
         for head in self.stl_q_net.heads:
             all_params.extend(head.parameters())
         all_params.extend(self.stl_q_net.actor.parameters())
         self.optimizer = torch.optim.Adam([
-                {'params': all_params, 'lr': param['q_learning']['lr']},
+                {'params': all_params, 'lr': param['q_learning']['stl_lr']},
             ])
+
+        self.reward_optimizer = torch.optim.Adam([
+                {'params': self.reward_q_net.parameters(), 'lr': param['q_learning']['reward_lr']},
+            ])
+
 
         self.update_target_network()
         self.rho_alphabet = rho_alphabet
@@ -46,6 +57,7 @@ class STL_Q_learning():
     
         self.buffer = BufferSTL(env_space['mdp'].shape, self.num_rho, param['replay_buffer_size'])
         self.temp = param['q_learning']['init_temp']
+        self.lambda_param = param['lambda']
         
         self.n_batches = param['q_learning']['batches_per_update']
         self.batch_size = param['q_learning']['batch_size']
@@ -61,15 +73,34 @@ class STL_Q_learning():
     def update_target_network(self):
         # copy current_network to target network
         self.stl_q_target.load_state_dict(self.stl_q_net.state_dict())
+        self.reward_q_target.load_state_dict(self.reward_q_net.state_dict())
+    
+    # def select_action(self, state, is_testing):
+    #     if is_testing or (np.random.uniform() > self.temp):
+    #         with torch.no_grad():
+    #             state_tensor = torch.FloatTensor(state['mdp']).to(device)
+    #             buchi = state['buchi']
+    #             action, is_eps, action_logprob = self.stl_q_net.act(state_tensor, buchi)
+
+    #         return action, is_eps, action_logprob
+    #     else:
+    #         with torch.no_grad():
+    #             state_tensor = torch.FloatTensor(state['mdp']).to(device)
+    #             buchi = state['buchi']
+    #             action, is_eps, action_logprob = self.stl_q_net.random_act(state, buchi)
+    #         return action, is_eps, action_logprob
     
     def select_action(self, state, is_testing):
         if is_testing or (np.random.uniform() > self.temp):
             with torch.no_grad():
                 state_tensor = torch.FloatTensor(state['mdp']).to(device)
                 buchi = state['buchi']
-                action, is_eps, action_logprob = self.stl_q_net.act(state_tensor, buchi)
-
-            return action, is_eps, action_logprob
+                stl_action, is_eps, action_logprob, stl_qs = self.stl_q_net.act(state_tensor, buchi)
+                rew_action, is_eps, action_logprob, rew_qs = self.reward_q_net.act(state_tensor, buchi)
+                combined_qs = (1 - self.lambda_param) * rew_qs + self.lambda_param * stl_qs
+                new_action = int(combined_qs.argmax())
+                new_is_eps = new_action > self.n_mdp_actions
+            return new_action, new_is_eps, action_logprob
         else:
             with torch.no_grad():
                 state_tensor = torch.FloatTensor(state['mdp']).to(device)
@@ -77,8 +108,8 @@ class STL_Q_learning():
                 action, is_eps, action_logprob = self.stl_q_net.random_act(state, buchi)
             return action, is_eps, action_logprob
 
-    def collect(self, s, b, a, r, s_, b_):
-        self.buffer.add(s, b, a, r, s_, b_)
+    def collect(self, s, b, a, rew, r, s_, b_):
+        self.buffer.add(s, b, a, rew, r, s_, b_)
     
     def decay_temp(self, decay_rate, min_temp, decay_type):
         
@@ -103,11 +134,11 @@ class STL_Q_learning():
         queue = [self.stl_tree]
         num_temporal_ops = 0
         while len(queue) > 0:
-            curr = queue.pop()
+            curr = queue.pop(0)
             if curr.id != "rho":
                 num_expr += 1
                 # set the head that'll correspond to this operator
-                if curr.id in ["G", "E"]:
+                if curr.id in ["G", "E", "F", "X"]:
                     curr.set_ordering(num_temporal_ops)
                     num_temporal_ops += 1
             for child in curr.children:
@@ -139,14 +170,17 @@ class STL_Q_learning():
         ## originally: Q(s) ~=   min(r, gamma * max_{a'} Q(s', a')) 
         ## ours:       Q(s) ~=       r + gamma * max_{a'} Q(s', a')
         Qs = self.stl_q_target.interior_forward(s_next, b_next, current_node.order)
+        
         q_action = Qs.to_tensor(0)[torch.arange(s_next.shape[0]), act]
-
         if cid == "G":
             td_val = torch.minimum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
-        elif cid == "E":
+        elif cid in ["E", "F"] :
             td_val = torch.maximum(phi_val, self.gamma * q_action)
             self.td_error_vector[current_node.order, :] = td_val.float()
+        elif cid == "X":
+            td_val = self.gamma * q_action
+            self.td_error_vector[current_node.order] = td_val
         return phi_val
         
     
@@ -159,23 +193,29 @@ class STL_Q_learning():
         # as the DFS search in set_heads
         #TODO: finish
         total_loss = 0
+        loss_func = torch.nn.SmoothL1Loss()
+        total_reward_loss = 0
         for k in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():
                 # s, a, rhos, s_, = self.buffer.sample(self.batch_size)
                 
-                s, b, a, rhos, s_, b_ = self.buffer.sample(self.batch_size)
+                s, b, a, rew, rhos, s_, b_ = self.buffer.sample(self.batch_size)
                 s = torch.tensor(s).type(torch.float)
                 b = torch.tensor(b).type(torch.int64).unsqueeze(1).unsqueeze(1)
                 s_ = torch.tensor(s_).type(torch.float)
                 b_ = torch.tensor(b_).type(torch.int64).unsqueeze(1).unsqueeze(1)
+                rews = torch.tensor(rew)
                 rhos = torch.tensor(rhos)
                 a = torch.tensor(a)
                 
                 # compute TD values
                 self.reset_td_errors()
-
+                Q_rew = self.reward_q_target(s_, b_)
+                reward_targets = rews + self.gamma * Q_rew.to_tensor(0).amax(axis=1)
                 Qs = self.stl_q_target(s_, b_)
+                if self.stl_q_target.outermost_negative:
+                    Qs *= -1
                 max_actions = Qs.argmax(dim = 1).to_tensor(0).long()
                 self.recurse_node(self.stl_tree, s, b, max_actions, rhos, s_, b_)
             
@@ -193,23 +233,30 @@ class STL_Q_learning():
             q_values = torch.stack([self.stl_q_net.interior_forward(s, b, head_idx, False)[torch.arange(len(a)), a] for head_idx in range(self.num_temporal_ops)])
             with torch.no_grad():
                 #  ~= r + gamma * max_{a'} Q(s', a')
-                targets = self.td_error_vector #[:, torch.arange(len(a)), a]
+                targets = self.td_error_vector.clone().detach() #[:, torch.arange(len(a)), a]
+
+            q_reward_values = self.reward_q_net(s, b, False).gather(1, a.unsqueeze(1)).squeeze()
 
             # print(self.stl_q_target(torch.tensor(self.buffer.states[self.buffer.current_traj]).float(), torch.tensor(self.buffer.buchis[self.buffer.current_traj]).type(torch.int64).unsqueeze(1).unsqueeze(1)))
             # print(targets.min(), targets.max())
             # print(q_values.min(), q_values.max())
             # print()
-            # import pdb; pdb.set_trace()
-            loss_func = torch.nn.SmoothL1Loss()
-            loss = loss_func(q_values, targets.clone().detach())
+            loss = loss_func(q_values, targets.clone().detach())            
+            reward_loss = loss_func(q_reward_values, reward_targets.clone().detach())
             total_loss += loss
-
+            total_reward_loss += reward_loss
             # backward optimize
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+            
+            # optimize for the reward net as well
+            self.reward_optimizer.zero_grad()
+            reward_loss.backward()
+            self.reward_optimizer.step()
             runner.log({
-                'loss': loss.item(),
+                'stl_loss': loss.item(),
+                'reward_loss': reward_loss.item()
             },
                 step=num_prev_epochs + k)
 
@@ -237,7 +284,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         rhos = info['rho']
 
         if not testing: 
-            agent.collect(state['mdp'], state['buchi'], action, rhos, next_state['mdp'], next_state['buchi'])
+            agent.collect(state['mdp'], state['buchi'], action, cost, rhos, next_state['mdp'], next_state['buchi'])
             agent.buffer.mark()
 
         if done:
@@ -257,9 +304,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
 
 def run_Q_STL(param, runner, env):
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
-    varphi = mtl.parse(param['ltl']['formula'])
+    # varphi = mtl.parse(param['ltl']['formula'])
     agent = STL_Q_learning(stl_tree, env.observation_space, env.action_space, env.mdp.rho_alphabet, param['gamma'], param)
-    fig, axes = plt.subplots(2, 1)
     history = []
     success_history = []
     running_reward = 10
@@ -271,7 +317,7 @@ def run_Q_STL(param, runner, env):
     for i_episode in tqdm(range(param['q_learning']['n_traj'])):
         # TRAINING
         all_rhos, max_q_val, t = rollout(env, agent, param, i_episode, runner, testing=False, visualize=((i_episode % 50) == 0))
-        stl_val = varphi(all_rhos)
+        stl_val = -100 #varphi(all_rhos)
 
         # Qs = agent.stl_q_net(torch.tensor(agent.buffer.states[agent.buffer.current_traj]).float(), torch.tensor(agent.buffer.buchis[agent.buffer.current_traj]).type(torch.int64).unsqueeze(1).unsqueeze(1))
         # pd.DataFrame(env.mdp.episode_rhos['y'])

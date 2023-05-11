@@ -10,16 +10,19 @@ from typing import Callable
 import mtl
 from mtl import ast
 
+from flloat.parser.ltlf import LTLfParser
+import flloat
+
 STL_IDS = ["G", "E", "&", "~", "|", "rho"]
 
 class STLNode():
     
-    def __init__(self, id: str, children, time_bounds: tuple=None, rho=None) -> None:
+    def __init__(self, id: str, children = [], time_bounds: tuple=None, rho=None) -> None:
         self.id = id
         self.children = children
         if self.id == "rho":
             assert len(self.children) == 0
-        elif self.id not in ["&", "|"]:
+        elif self.id not in ["&", "|", 'True', 'False']:
             # if it's not an 'and' or an 'or', it should only have one child
             assert len(self.children) == 1
         self.rho = rho
@@ -28,6 +31,12 @@ class STLNode():
     
     def set_ordering(self, order):
         self.order = order
+    
+    def __repr__(self) -> str:
+        return f'Id:{self.id}, rho:{self.rho}' if self.rho else f'Id:{self.id}, children:{self.children}'
+    
+    def __str__(self) -> str:
+        return f'Id:{self.id}, children:{self.children}'
 
 def parse_stl_into_tree(stl_formula):
     '''
@@ -35,15 +44,52 @@ def parse_stl_into_tree(stl_formula):
     see https://github.com/mvcisback/py-metric-temporal-logic
     env: string
     '''
-    phi = mtl.parse(stl_formula)
+    # phi = mtl.parse(stl_formula)
+    parser = LTLfParser()
+    phi = parser(stl_formula.replace("~", "!"))
+    root = parse_helpers_ltlf(phi)
+    # root = parse_helper(phi)
+    return root
+
     #TODO: include time bounds from the formula if they exist
-    return parse_helper(phi)
+    # return parse_helper(phi)
+
+def parse_helpers_ltlf(phi):
+    #TODO: include time bounds from the formula if they exist
+    # match based on id
+    
+    if str(phi) in ["True", 'true']:
+        return STLNode('True') 
+    elif str(phi) in ["False", 'false']:
+        return STLNode('False') 
+
+    members = phi._members()
+
+    if len(members) == 1:
+        id = "rho"  # at a leaf
+        robustness_fxn = str(members)
+        return STLNode(id, [], rho=robustness_fxn)
+    else:
+        id = str(members[0])
+
+    # get the children of the current node
+    node_children = []
+    try:
+        for child in members[1]:
+            node_children.append(parse_helpers_ltlf(child))
+    except:
+        node_children.append(parse_helpers_ltlf(members[1]))
+
+    return STLNode(id, children=node_children)
+
 
 def parse_helper(curr_phi):
     #TODO: include time bounds from the formula if they exist
     # match based on id
     if type(curr_phi) == ast.Neg:
         id = "~"
+    elif type(curr_phi) == ast.Next:
+        id = "X"
     elif type(curr_phi) == ast.WeakUntil:
         print("Support for Until is not ready!")
         raise NotImplementedError
