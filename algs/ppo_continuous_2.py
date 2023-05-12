@@ -136,7 +136,7 @@ class PPO:
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
         ltl_reward, done = self.ltl_reward_1(rhos, edge, terminal, b, b_)
-        edge_lambda = 1.0 #TODO: manually set this for now
+        edge_lambda = 25. #TODO: manually set this for now
         return mdp_reward + edge_lambda * ltl_reward, done
 
     def update(self):
@@ -313,7 +313,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     print(action)
     return ep_reward, disc_ep_reward, t
         
-def run_ppo_continuous(param, env, runner, second_order = False, to_hallucinate=False):
+def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False):
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
