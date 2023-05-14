@@ -1,0 +1,67 @@
+============================================================================================
+============================================================================================
+Device set to : NVIDIA GeForce RTX 2080 Ti
+============================================================================================
+Device set to : NVIDIA GeForce RTX 2080 Ti
+============================================================================================
+Device set to : NVIDIA GeForce RTX 2080 Ti
+============================================================================================
+HOA: v1
+tool: "owl" "* *"
+Start: 0
+acc-name: Buchi
+Acceptance: 1 Inf(0)
+properties: trans-acc trans-label 
+AP: 3 "y" "r" "b"
+--BODY--
+State: 1
+[!0 & !2] 1
+[0 & !2] 0 {0}
+State: 0
+[!1 & !2] 0
+[!0 & 1 & !2] 1
+[0 & 1 & !2] 0 {0}
+--END--
+
+Transition-based Acceptance
+HOA: v1
+States: 3
+Start: 0
+AP: 3 "y" "r" "b"
+acc-name: Buchi
+Acceptance: 1 Inf(0)
+properties: trans-labels explicit-labels trans-acc deterministic
+--BODY--
+State: 0
+[!1&!2] 0
+[!0&1&!2] 1
+[0&1&!2] 0 {0}
+State: 1
+[!0&!2] 1
+[0&!2] 0 {0}
+State: 2
+[t] 2
+--END--
+State-based Acceptance
+HOA: v1
+States: 4
+Start: 0
+AP: 3 "y" "r" "b"
+acc-name: Buchi
+Acceptance: 1 Inf(0)
+properties: trans-labels explicit-labels state-acc deterministic
+--BODY--
+State: 0 {0}
+[0&1&!2] 0
+[!1&!2] 1
+[!0&1&!2] 2
+State: 1
+[0&1&!2] 0
+[!1&!2] 1
+[!0&1&!2] 2
+State: 2
+[0&!2] 0
+[!0&!2] 2
+State: 3
+[t] 3
+--END--

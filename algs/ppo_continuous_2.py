@@ -120,7 +120,6 @@ class PPO:
         b_device = b_.device
         return b_.cpu().apply_(lambda x: x in self.accepting_states).float().to(b_device), terminal
         # return torch.isin(b_, self.accepting_states).float(), terminal
-    
 
     def ltl_reward_3(self, rhos, edge, terminal, b, b_):
         if terminal: #took sink
@@ -145,6 +144,7 @@ class PPO:
         # TODO: add an automatic structure selection mechanism
         ltl_reward, done = self.ltl_reward_1(rhos, edge, terminal, b, b_)
         edge_lambda = 25. #TODO: manually set this for now
+        print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
         return mdp_reward + edge_lambda * ltl_reward, done
 
     def update(self):
