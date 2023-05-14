@@ -30,12 +30,15 @@ class Trajectory:
         self.act_idxs = []
         self.is_eps = []
         self.logprobs = []
+        self.rhos = []
+        self.edges = []
+        self.terminals = []
         self.counter = 0
         self.done = False
         self.has_reward = False
         self.action_placeholder = action_placeholder # should be of MDP action shape
     
-    def add(self, s, b, a, r, s_, b_, is_eps, act_idx, logprob):
+    def add(self, s, b, a, r, s_, b_, is_eps, act_idx, logprob, rhos, edge, terminal):
         self.counter += 1
         # if r > 0: import pdb; pdb.set_trace()
         self.states.append(s)
@@ -49,6 +52,9 @@ class Trajectory:
         self.is_eps.append(is_eps)
         self.act_idxs.append(act_idx)
         self.logprobs.append(logprob)
+        self.rhos.append(rhos)
+        self.edges.append(edge)
+        self.terminals.append(terminal)
     
     def get_last_buchi(self):
         return self.next_buchis[-1]
@@ -217,6 +223,7 @@ class RolloutBuffer:
                 rewards = []
                 discounted_reward = 0
                 for reward in reversed(traj.rewards):
+                    # print(f"reward: {reward}, discounted_reward: {discounted_reward}, gamma: {gamma}")
                     discounted_reward = reward + (gamma * discounted_reward)
                     rewards.insert(0, discounted_reward)
                 all_rewards += rewards # extend list
@@ -239,11 +246,14 @@ class RolloutBuffer:
         all_logprobs = torch.squeeze(torch.tensor(all_logprobs)).detach().to(device)
         all_rewards = torch.tensor(np.array(all_rewards), dtype=torch.float32).to(device)
         all_rhos = torch.tensor(np.array(all_rhos), dtype=torch.float32).to(device)
-        all_edges = torch.tensor(np.array(all_edges), dtype=torch.float32).to(device)
+        # all_edges = torch.tensor(np.array(all_edges), dtype=torch.float32).to(device)
+        # edge is a new data structure, not torch tensor
+        all_edges = np.array(all_edges) 
         all_terminals = torch.tensor(np.array(all_terminals), dtype=torch.bool).to(device) #TODO: check make the terminal to bool type
         # all_dones = torch.tensor(np.array(all_dones), dtype=torch.float32).to(device)
         # all_rewards = (all_rewards - all_rewards.mean()) / (all_rewards.std() + 1e-7)
-
+        # print(f"all_rhos.shape: {all_rhos.shape}")
+        # print(f"all_terminals.shape: {all_terminals.shape}")
         return all_states, all_buchis, all_actions, all_next_buchis, all_rewards, all_action_idxs, all_logprobs, all_rhos, all_edges, all_terminals #, all_dones
 
     def get_states(self):

@@ -107,12 +107,20 @@ class PPO:
         print(f'Setting temperature: {self.temp}')
         self.set_action_std(self.temp)
     
+    # def ltl_reward_1(self, rhos, edge, terminal, b, b_):
+    #     if terminal: #took sink
+    #         return 0, True
+    #     if b_ in self.accepting_states:
+    #         return 1, False
+    #     return 0, False
+
     def ltl_reward_1(self, rhos, edge, terminal, b, b_):
-        if terminal: #took sink
-            return 0, True
-        if b_ in self.accepting_states:
-            return 1, False
-        return 0, False
+        # print(f"b_ shape: {b_.shape}")
+        # print(f"accepting states: {self.accepting_states}")
+        b_device = b_.device
+        return b_.cpu().apply_(lambda x: x in self.accepting_states).float().to(b_device), terminal
+        # return torch.isin(b_, self.accepting_states).float(), terminal
+    
 
     def ltl_reward_3(self, rhos, edge, terminal, b, b_):
         if terminal: #took sink
@@ -338,8 +346,8 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         env.mdp.rho_alphabet,
         env.observation_space, 
         env.action_space, 
-        env.automaton.accepting_sets,
         param['gamma'], 
+        env.automaton.accepting_sets,
         param, 
         to_hallucinate)
     
@@ -370,7 +378,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                test_data.append(rollout(env, agent, param, i_episode, testing=True, visualize= test_iter == 0 )) #param['n_traj']-100) ))
+                test_data.append(rollout(env, agent, param, i_episode, runner, testing=True, visualize= test_iter == 0 )) #param['n_traj']-100) ))
             test_data = np.array(test_data)
     
         if i_episode % 1 == 0:

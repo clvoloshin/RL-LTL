@@ -8,7 +8,7 @@ class ConstrainedOptimization():
         self.lambda_multiplier = param["mutiplier"]
         self.max_update_iters = param["num_outer_iters"]
         self.accepting_states = torch.tensor(env.automaton.accepting_sets)
-        self.terminal_states = torch.tensor([state for state in env.automaton.states])
+        self.terminal_states = torch.tensor([state for state in env.automaton.states if state.terminal()])
         self.param = param
         self.runner = runner
         

@@ -1,7 +1,7 @@
 env:
   _target_: 'envs.base_envs.flatworld.FlatWorld'
   render_mode: 'human'
-  continuous_actions: False
+  continuous_actions: True
 classes:
   discrete: <class 'envs.flatworld.flatworld'>
   continuous: <class 'envs.flatworld.flatworld_continuous'>
