@@ -107,16 +107,18 @@ class PPO:
         print(f'Setting temperature: {self.temp}')
         self.set_action_std(self.temp)
     
-    # def ltl_reward_1(self, rhos, edge, terminal, b, b_):
-    #     if terminal: #took sink
-    #         return 0, True
-    #     if b_ in self.accepting_states:
-    #         return 1, False
-    #     return 0, False
+    def ltl_reward_1_scalar(self, rhos, edge, terminal, b, b_):
+        if terminal: #took sink
+            return 0, True
+        if b_ in self.accepting_states:
+            return 1, False
+        return 0, False
 
-    def ltl_reward_1(self, rhos, edge, terminal, b, b_):
+    def ltl_reward_1(self, rhos, edge, terminal, b, b_, testing=False):
         # print(f"b_ shape: {b_.shape}")
         # print(f"accepting states: {self.accepting_states}")
+        if testing:
+          return self.ltl_reward_1_scalar(rhos, edge, terminal, b, b_)  
         b_device = b_.device
         return b_.cpu().apply_(lambda x: x in self.accepting_states).float().to(b_device), terminal
         # return torch.isin(b_, self.accepting_states).float(), terminal
@@ -143,8 +145,8 @@ class PPO:
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
         ltl_reward, done = self.ltl_reward_1(rhos, edge, terminal, b, b_)
-        edge_lambda = 25. #TODO: manually set this for now
-        print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
+        edge_lambda = 0. #TODO: manually set this for now
+        #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
         return mdp_reward + edge_lambda * ltl_reward, done
 
     def update(self):
@@ -209,7 +211,6 @@ class PPO:
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
             logger.logkv('rewards', rewards.mean())
-            
             # take gradient step
             self.optimizer.zero_grad()
             loss.mean().backward()
@@ -221,6 +222,7 @@ class PPO:
 
         # clear buffer
         self.buffer.clear()
+        return loss.mean(), {"policy_grad": policy_grad.mean(), "val_loss": val_loss.item()}
     
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
@@ -228,7 +230,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     state, _ = env.reset()
     states.append(state['mdp'])
     buchis.append(state['buchi'])
-    ep_reward = 0
+    mdp_ep_reward = 0
+    ltl_ep_reward = 0
     disc_ep_reward = 0
     if not testing: 
         agent.buffer.restart_traj()
@@ -253,24 +256,24 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         
         # TODO: update the env_step function to return rhos, edge, terminal as info
         try:
-            next_state, cost, done, info = env.step(action, is_eps)
+            next_state, mdp_reward, done, info = env.step(action, is_eps)
         except:
-            next_state, cost, done, _, info = env.step(action, is_eps)
-        reward = int(info['is_accepting'])
+            next_state, mdp_reward, done, _, info = env.step(action, is_eps)
+        #reward = int(info['is_accepting'])
         rhos = info['rho']
         edge = info['edge']
         terminal = info['is_rejecting']
-
+        ltl_reward, _ = agent.ltl_reward_1(rhos, edge, terminal, None, next_state['buchi'], testing=True)  #TODO: fix None and fix testing
         if testing & visualize:
             s = torch.tensor(next_state['mdp']).type(torch.float)
             b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
-            print(next_state['mdp'])
-            print(next_state['buchi'])
-            try:
-                print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
-            except:
-                pass
-            print(action)
+            #print(next_state['mdp'])
+            #print(next_state['buchi'])
+            # try:
+            #     print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
+            # except:
+            #     pass
+            # print(action)
             # print(agent.Q(s, b))
 
         # tic = time.time()
@@ -279,7 +282,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             state['mdp'], 
             state['buchi'], 
             action, 
-            info['is_accepting'], 
+            mdp_reward, 
             next_state['mdp'], 
             next_state['buchi'], 
             action_idx, 
@@ -294,8 +297,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # if visualize:
         #     env.render()
         # agent.buffer.atomics.append(info['signal'])
-        ep_reward += reward
-        disc_ep_reward += param['gamma']**(t-1) * reward
+        mdp_ep_reward += mdp_reward
+        ltl_ep_reward += ltl_reward
+        disc_ep_reward += param['gamma']**(t-1) * mdp_reward # TODO: change this to represent combined reward
 
         states.append(next_state['mdp'])
         buchis.append(next_state['buchi'])
@@ -312,14 +316,14 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             runner.log({"training": wandb.Image(env.render(states=states, save_dir=None))})
     # print('Get Experience', total_experience_time)
     # print('Get Action', total_action_time)
-    print(next_state['mdp'])
-    print(next_state['buchi'])
-    try:
-        print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
-    except:
-        pass
-    print(action)
-    return ep_reward, disc_ep_reward, t
+    #print(next_state['mdp'])
+    #print(next_state['buchi'])
+    # try:
+    #     print(env.mdp.distances_to_wp(next_state['mdp'][0], next_state['mdp'][1])[1:11])
+    # except:
+    #     pass
+    #print(action)
+    return mdp_ep_reward, ltl_ep_reward, t
         
 def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False):
     
@@ -362,13 +366,15 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
 
         # Get trajectory
         # tic = time.time()
-        ep_reward, disc_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False)
+        mdp_ep_reward, ltl_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
 
         # update weights
         # tic = time.time()
-        agent.update()
+        losstuple = agent.update()
+        if losstuple is not None:
+            current_loss, loss_info = losstuple
         # toc2 = time.time() - tic
         # print(toc, toc2)
         
@@ -381,25 +387,47 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
                 test_data.append(rollout(env, agent, param, i_episode, runner, testing=True, visualize= test_iter == 0 )) #param['n_traj']-100) ))
             test_data = np.array(test_data)
     
-        if i_episode % 1 == 0:
-            avg_timesteps = t #np.mean(timesteps)
-            history += [disc_ep_reward]
+        if i_episode > 1 and i_episode % 1 == 0:
+            runner.log({#'Iteration': i_episode,
+                    #  'last_reward': last_reward,
+                    #  'Method': method,
+                    #  'Success': success_history[-1],
+                    #  'Last20Success': np.mean(np.array(success_history[-20:])),
+                    #  'DiscSuccess': disc_success_history[-1],
+                    #  'Last20DiscSuccess': np.mean(np.array(disc_success_history[-20:])),
+                    #  'EpisodeReward': ep_reward,
+                    #  'DiscEpisodeReward': disc_ep_reward,
+                    # 'EpisodeRhos': stl_val,
+                    # 'ExpectedQVal': max_q_val,
+                    'R_LTL': ltl_ep_reward,
+                    'R_MDP': mdp_ep_reward,
+                    'LossVal': current_loss,
+                    #'AvgTimesteps': t,
+                    "PolicyGradLoss": loss_info["policy_grad"],
+                    "MSEValLoss": loss_info["val_loss"],
+                    #  'TimestepsAlive': avg_timesteps,
+                    #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
+                     'ActionTemp': agent.temp,
+                     })
+            
+            # avg_timesteps = t #np.mean(timesteps)
+            #history += [disc_ep_reward]
             # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
-            success_history += [test_data[:, 0].mean()]
-            disc_success_history += [test_data[:, 1].mean()]
+            # success_history += [test_data[:, 0].mean()]
+            # disc_success_history += [test_data[:, 1].mean()]
             method = "PPO"
-            plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
-            logger.logkv('Iteration', i_episode)
-            logger.logkv('Method', method)
-            logger.logkv('Success', success_history[-1])
-            logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
-            logger.logkv('DiscSuccess', disc_success_history[-1])
-            logger.logkv('Last20DiscSuccess', np.mean(np.array(disc_success_history[-20:])))
-            logger.logkv('EpisodeReward', ep_reward)
-            logger.logkv('DiscEpisodeReward', disc_ep_reward)
-            logger.logkv('TimestepsAlive', avg_timesteps)
-            logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['ppo']['T'])
-            logger.logkv('ActionTemp', agent.temp)
-            logger.dumpkvs()
+            #plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
+            # logger.logkv('Iteration', i_episode)
+            # logger.logkv('Method', method)
+            # logger.logkv('Success', success_history[-1])
+            # logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
+            # logger.logkv('DiscSuccess', disc_success_history[-1])
+            # logger.logkv('Last20DiscSuccess', np.mean(np.array(disc_success_history[-20:])))
+            # logger.logkv('EpisodeReward', ep_reward)
+            # logger.logkv('DiscEpisodeReward', disc_ep_reward)
+            # logger.logkv('TimestepsAlive', avg_timesteps)
+            # logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['ppo']['T'])
+            # logger.logkv('ActionTemp', agent.temp)
+            # logger.dumpkvs()
             
     plt.close()

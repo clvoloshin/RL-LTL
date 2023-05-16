@@ -18,7 +18,7 @@ ppo:
   temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
   min_action_temp: 0.1             # minimum action_std (stop decay after action_std <= min_action_std)
   temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
-  K_epochs: 5               # update policy for K epochs in one PPO update
+  K_epochs: 1               # update policy for K epochs in one PPO update
   batch_size: 128               # update policy for K epochs in one PPO update
   eps_clip: 0.4          # clip parameter for PPO
   lr_actor: 0.001       # learning rate for actor network
