@@ -21,10 +21,16 @@ def main(cfg):
     np.random.seed(seeds[0])
     env = hydra.utils.instantiate(cfg.env)
     automaton = AutomatonRunner(Automaton(**cfg['ltl']))
-    sim = Simulator(env, automaton, cfg['lambda'])
+    #TODO: automatically find cycles, if possible
+    #G(F(y & X(F(r)))) & G~b
+    constrained_rew_fxn = {0: [automaton.edges(0, 1)[0]], 1: [automaton.edges(1, 2)[0]], 2: [automaton.edges(2, 0)[0]]}
+
+    sim = Simulator(env, automaton, cfg['lambda'], buchi_cycle=constrained_rew_fxn)
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True)) as run:
         # run_Q_STL(cfg, run, sim)
         # copt = ConstrainedOptimization(cfg, run, sim)
+
+        
         run_ppo_continuous_2(cfg, run, sim)
         # run_value_iter(cfg, run, sim)
     print(cfg)
@@ -32,7 +38,21 @@ def main(cfg):
 if __name__ == "__main__":
     main()
 
+## G(F(g) & ~b & ~r & ~y)
+#constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
 
+## G(F(y & X(F(r)))) & G~b
+#constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0]], 1: [env.automaton.edges(1, 2)[0]], 2: [env.automaton.edges(2, 0)[0]]}
+#import pdb; pdb.set_trace()
+## F(G(y))
+#constrained_rew_fxn = {1: [env.automaton.edges(1, 1)[0]]}
+
+## F(r & XF(G(y)))
+#constrained_rew_fxn = {2: [env.automaton.edges(2, 2)[0]]}  
+#import pdb; pdb.set_trace()
+## F(r & XF(g & XF(y))) & G~b
+# constrained_rew_fxn = {2: [env.automaton.edges(2, 3)[0]], 3: [env.automaton.edges(3, 1)[0]], 1: [env.automaton.edges(1, 0)[0]], 0: [env.automaton.edges(0, 0)[0]]}  
+# constrained_rew_fxn = {0: [env.automaton.edges(0, 0)[0]]}
 
 
 

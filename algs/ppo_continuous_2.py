@@ -106,49 +106,6 @@ class PPO:
         self.temp = round(self.temp, 4)
         print(f'Setting temperature: {self.temp}')
         self.set_action_std(self.temp)
-    
-    def ltl_reward_1_scalar(self, rhos, edge, terminal, b, b_):
-        if terminal: #took sink
-            return 0, True
-        if b_ in self.accepting_states:
-            return 1, False
-        return 0, False
-
-    def ltl_reward_1(self, rhos, edge, terminal, b, b_):
-        # print(f"b_ shape: {b_.shape}")
-        # print(f"accepting states: {self.accepting_states}")
-        if isinstance(b_, torch.TensorType): 
-            b_device = b_.device
-            return b_.cpu().apply_(lambda x: x in self.accepting_states).float().to(b_device), terminal
-        else:
-            return self.ltl_reward_1_scalar(rhos, edge, terminal, b, b_)
-        # return torch.isin(b_, self.accepting_states).float(), terminal
-
-    def ltl_reward_3(self, rhos, edge, terminal, b, b_):
-        if terminal: #took sink
-            return -1, True
-        
-        if b in self.reward_funcs:
-            reward_func = self.reward_funcs[b][0]
-            r = self.recurse_node(reward_func.stl, None, None, None, rhos, None, None)
-            return r, False
-        else: # epsilon transition
-            return 0, False
-    
-    def constrained_reward(self, 
-                           rhos, 
-                           edge, 
-                           terminal, 
-                           b, 
-                           b_, 
-                           mdp_reward
-                           ):
-        # will have multiple choices of reward structure
-        # TODO: add an automatic structure selection mechanism
-        ltl_reward, done = self.ltl_reward_1(rhos, edge, terminal, b, b_)
-        edge_lambda = 0. #TODO: manually set this for now
-        #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
-        return mdp_reward + edge_lambda * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
 
     def update(self):
         self.num_updates_called += 1
@@ -202,7 +159,6 @@ class PPO:
             policy_grad = -torch.min(surr1, surr2) 
             val_loss = self.MseLoss(state_values, crewards) 
             entropy_loss = dist_entropy
-            
             # if (rewards == 0).all():
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
@@ -222,6 +178,8 @@ class PPO:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
         # clear buffer
+        # if self.num_updates_called > 125 and self.num_updates_called % 25 == 0:
+        #     import pdb; pdb.set_trace()
         self.buffer.clear()
         return loss.mean(), {"policy_grad": policy_grad.mean(), "val_loss": val_loss.item()}
     
