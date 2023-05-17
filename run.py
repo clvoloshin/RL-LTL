@@ -21,7 +21,7 @@ def main(cfg):
     np.random.seed(seeds[0])
     env = hydra.utils.instantiate(cfg.env)
     automaton = AutomatonRunner(Automaton(**cfg['ltl']))
-    sim = Simulator(env, automaton)
+    sim = Simulator(env, automaton, cfg['lambda'])
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True)) as run:
         # run_Q_STL(cfg, run, sim)
         # copt = ConstrainedOptimization(cfg, run, sim)

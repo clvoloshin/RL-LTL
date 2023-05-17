@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 import gym
 import gym.spaces
 import numpy as np
+import torch
 from copy import deepcopy
 import time
 
@@ -53,7 +54,7 @@ class AbstractEnv(metaclass=ABCMeta):
         return T, C
 
 class Simulator(gym.Env):
-    def __init__(self, mdp, automaton):
+    def __init__(self, mdp, automaton, lambda_val):
         self.mdp = mdp
         self.automaton = automaton
         spaces = {
@@ -78,6 +79,7 @@ class Simulator(gym.Env):
         self.accepting_states = set()
         self.rejecting_states = set()
         self.inf_often = []
+        self.lambda_val = lambda_val
     
     def unnormalize(self, states):
         try:
@@ -159,6 +161,48 @@ class Simulator(gym.Env):
             else:
                 accepting_rejecting_neutral = 0
             return automaton_state, accepting_rejecting_neutral
+    
+    def ltl_reward_1_scalar(self, rhos, edge, terminal, b, b_):
+        if terminal: #took sink
+            return 0, True
+        if b_ in self.automaton.automaton.accepting_states:
+            return 1, False
+        return 0, False
+
+    def ltl_reward_1(self, rhos, edge, terminal, b, b_):
+        # print(f"b_ shape: {b_.shape}")
+        # print(f"accepting states: {self.accepting_states}")
+        if isinstance(b_, torch.TensorType): 
+            b_device = b_.device
+            return b_.cpu().apply_(lambda x: x in self.automaton.automaton.accepting_states).float().to(b_device), terminal
+        else:
+            return self.ltl_reward_1_scalar(rhos, edge, terminal, b, b_)
+        # return torch.isin(b_, self.accepting_states).float(), terminal
+
+    # def ltl_reward_3(self, rhos, edge, terminal, b, b_):
+    #     if terminal: #took sink
+    #         return -1, True
+        
+    #     if b in self.reward_funcs:
+    #         reward_func = self.reward_funcs[b][0]
+    #         r = self.recurse_node(reward_func.stl, None, None, None, rhos, None, None)
+    #         return r, False
+    #     else: # epsilon transition
+    #         return 0, False
+
+    def constrained_reward(self, 
+                            rhos, 
+                            edge, 
+                            terminal, 
+                            b, 
+                            b_, 
+                            mdp_reward
+                            ):
+        # will have multiple choices of reward structure
+        # TODO: add an automatic structure selection mechanism
+        ltl_reward, done = self.ltl_reward_1(rhos, edge, terminal, b, b_) #TODO: manually set this for now
+        #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
+        return mdp_reward + self.lambda_val * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
     
     # @timeit
     def step(self, action, is_eps=False):

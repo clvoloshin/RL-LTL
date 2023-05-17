@@ -114,13 +114,14 @@ class PPO:
             return 1, False
         return 0, False
 
-    def ltl_reward_1(self, rhos, edge, terminal, b, b_, testing=False):
+    def ltl_reward_1(self, rhos, edge, terminal, b, b_):
         # print(f"b_ shape: {b_.shape}")
         # print(f"accepting states: {self.accepting_states}")
-        if testing:
-          return self.ltl_reward_1_scalar(rhos, edge, terminal, b, b_)  
-        b_device = b_.device
-        return b_.cpu().apply_(lambda x: x in self.accepting_states).float().to(b_device), terminal
+        if isinstance(b_, torch.TensorType): 
+            b_device = b_.device
+            return b_.cpu().apply_(lambda x: x in self.accepting_states).float().to(b_device), terminal
+        else:
+            return self.ltl_reward_1_scalar(rhos, edge, terminal, b, b_)
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
     def ltl_reward_3(self, rhos, edge, terminal, b, b_):
@@ -147,7 +148,7 @@ class PPO:
         ltl_reward, done = self.ltl_reward_1(rhos, edge, terminal, b, b_)
         edge_lambda = 0. #TODO: manually set this for now
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
-        return mdp_reward + edge_lambda * ltl_reward, done
+        return mdp_reward + edge_lambda * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
 
     def update(self):
         self.num_updates_called += 1
@@ -163,7 +164,7 @@ class PPO:
             
             # TODO: update the RolloutBuffer to return rhos, edge, terminal
             old_states, old_buchis, old_actions, old_next_buchis, rewards, \
-                old_action_idxs, old_logprobs, rhos, edge, terminal \
+                crewards, old_action_idxs, old_logprobs, old_rhos, old_edges, old_terminals \
                     = self.buffer.get_torch_data(
                         self.gamma, self.batch_size
                     )
@@ -178,8 +179,8 @@ class PPO:
             # rewards, _ = self.reward_funcs(None, None, old_buchis, old_next_buchis, rewards)
             
             # calculate the constrained reward
-            rewards, _ = self.constrained_reward(rhos, edge, terminal, old_buchis,\
-                                              old_next_buchis, rewards)
+            # rewards, _, info = self.constrained_reward(rhos, edge, terminal, old_buchis,\
+            #                                   old_next_buchis, rewards)
             
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(
@@ -192,14 +193,14 @@ class PPO:
             ratios = torch.exp(logprobs - old_logprobs.detach())
 
             # Finding Surrogate Loss
-            advantages = rewards - state_values.detach()
+            advantages = crewards - state_values.detach()
 
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
 
             # final loss of clipped objective PPO
             policy_grad = -torch.min(surr1, surr2) 
-            val_loss = self.MseLoss(state_values, rewards) 
+            val_loss = self.MseLoss(state_values, crewards) 
             entropy_loss = dist_entropy
             
             # if (rewards == 0).all():
@@ -210,7 +211,7 @@ class PPO:
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
-            logger.logkv('rewards', rewards.mean())
+            logger.logkv('rewards', crewards.mean())
             # take gradient step
             self.optimizer.zero_grad()
             loss.mean().backward()
@@ -263,7 +264,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         rhos = info['rho']
         edge = info['edge']
         terminal = info['is_rejecting']
-        ltl_reward, _ = agent.ltl_reward_1(rhos, edge, terminal, None, next_state['buchi'], testing=True)  #TODO: fix None and fix testing
+        constrained_reward, _, rew_info = env.constrained_reward(rhos, edge, terminal, state['buchi'], next_state['buchi'], mdp_reward)
         if testing & visualize:
             s = torch.tensor(next_state['mdp']).type(torch.float)
             b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -282,7 +283,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             state['mdp'], 
             state['buchi'], 
             action, 
-            mdp_reward, 
+            mdp_reward,
+            constrained_reward, 
             next_state['mdp'], 
             next_state['buchi'], 
             action_idx, 
@@ -297,8 +299,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # if visualize:
         #     env.render()
         # agent.buffer.atomics.append(info['signal'])
-        mdp_ep_reward += mdp_reward
-        ltl_ep_reward += ltl_reward
+        mdp_ep_reward += rew_info["mdp_reward"]
+        ltl_ep_reward += rew_info["ltl_reward"]
         disc_ep_reward += param['gamma']**(t-1) * mdp_reward # TODO: change this to represent combined reward
 
         states.append(next_state['mdp'])
