@@ -31,7 +31,7 @@ def main(cfg):
         # copt = ConstrainedOptimization(cfg, run, sim)
 
         
-        run_ppo_continuous_2(cfg, run, sim)
+        run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True)
         # run_value_iter(cfg, run, sim)
     print(cfg)
 

@@ -137,7 +137,7 @@ class Simulator(gym.Env):
             current_aut_state = self.automaton.get_state()
             label, _ = self.mdp.label(mdp_state)
             self.automaton.set_state(desired_current_aut_state)
-            automaton_state = self.automaton.step(label)
+            automaton_state, edge = self.automaton.step(label)
             self.automaton.set_state(current_aut_state)
             # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
             if (automaton_state in self.automaton.automaton.accepting_states):
@@ -151,8 +151,8 @@ class Simulator(gym.Env):
             current_aut_state = self.automaton.get_state()
             label, _ = self.mdp.label(mdp_state)
             self.automaton.set_state(desired_current_aut_state)
-            automaton_state = self.automaton.epsilon_step(eps_action)
-            automaton_state = self.automaton.step(label) # Do we take this step right now???
+            automaton_state, edge = self.automaton.epsilon_step(eps_action)
+            automaton_state, edge = self.automaton.step(label) # Do we take this step right now???
             self.automaton.set_state(current_aut_state)
             # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
             if (automaton_state in self.automaton.automaton.accepting_states):
@@ -235,7 +235,7 @@ class Simulator(gym.Env):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
         #if edge in self.buchi_cycle.values():
-        ltl_reward, done = self.ltl_reward_3(rhos, edge, terminal, b, b_) #TODO: manually set this for now
+        ltl_reward, done = self.ltl_reward_2(rhos, edge, terminal, b, b_) #TODO: manually set this for now
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
         return mdp_reward + self.lambda_val * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
     

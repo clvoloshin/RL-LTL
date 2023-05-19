@@ -28,7 +28,6 @@ print("=========================================================================
 
 class PPO:
     def __init__(self, 
-            reward_funcs,
             tree,
             rho_alphabet,
             env_space, 
@@ -40,7 +39,6 @@ class PPO:
             ) -> None:
 
         self.stl_tree = tree
-        self.reward_funcs = reward_funcs
         self.rho_alphabet = rho_alphabet
         self.accepting_states = accepting_states
         lr_actor = param['ppo']['lr_actor']
@@ -104,7 +102,7 @@ class PPO:
             self.temp = min_temp
         
         self.temp = round(self.temp, 4)
-        print(f'Setting temperature: {self.temp}')
+        #print(f'Setting temperature: {self.temp}')
         self.set_action_std(self.temp)
 
     def update(self):
@@ -121,7 +119,7 @@ class PPO:
             
             # TODO: update the RolloutBuffer to return rhos, edge, terminal
             old_states, old_buchis, old_actions, old_next_buchis, rewards, \
-                crewards, old_action_idxs, old_logprobs, old_rhos, old_edges, old_terminals \
+                lrewards, crewards, old_action_idxs, old_logprobs, old_rhos, old_edges, old_terminals \
                     = self.buffer.get_torch_data(
                         self.gamma, self.batch_size
                     )
@@ -234,7 +232,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             #     pass
             # print(action)
             # print(agent.Q(s, b))
-
         # tic = time.time()
         agent.buffer.add_experience(
             env, 
@@ -242,6 +239,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             state['buchi'], 
             action, 
             mdp_reward,
+            rew_info["ltl_reward"],
             constrained_reward, 
             next_state['mdp'], 
             next_state['buchi'], 
@@ -305,7 +303,6 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
 
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
     agent = PPO(
-        constrained_rew_fxn,
         stl_tree,
         env.mdp.rho_alphabet,
         env.observation_space, 
@@ -315,10 +312,10 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         param, 
         to_hallucinate)
     
-    fig, axes = plt.subplots(2, 1)
-    history = []
-    success_history = []
-    disc_success_history = []
+    # fig, axes = plt.subplots(2, 1)
+    # history = []
+    # success_history = []
+    # disc_success_history = []
     fixed_state, _ = env.reset()
 
     for i_episode in tqdm(range(param['ppo']['n_traj'])):
