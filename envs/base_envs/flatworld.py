@@ -115,7 +115,7 @@ class FlatWorld(gym.Env):
                 computed_rho = 1
                 #computed_rho = delta / radius
             else:
-                computed_rho = 0 #delta / normalization
+                computed_rho = delta / normalization
             all_robustness_vals[idx] = computed_rho
             self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
         return all_robustness_vals

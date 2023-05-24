@@ -28,19 +28,13 @@ print("=========================================================================
 
 class PPO:
     def __init__(self, 
-            tree,
-            rho_alphabet,
             env_space, 
             act_space, 
             gamma, 
-            accepting_states,
             param, 
             to_hallucinate=False
             ) -> None:
 
-        self.stl_tree = tree
-        self.rho_alphabet = rho_alphabet
-        self.accepting_states = accepting_states
         lr_actor = param['ppo']['lr_actor']
         lr_critic = param['ppo']['lr_critic']
         self.K_epochs = param['ppo']['K_epochs']
@@ -54,7 +48,8 @@ class PPO:
         
         self.optimizer = torch.optim.Adam([
                         {'params': self.policy.actor.parameters(), 'lr': lr_actor},
-                        {'params': self.policy.main_head.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.mean_head.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.log_std_head.parameters(), 'lr': lr_actor},
                         {'params': self.policy.action_switch.parameters(), 'lr': lr_actor},
                         {'params': self.policy.critic.parameters(), 'lr': lr_critic},
                     ])
@@ -136,7 +131,8 @@ class PPO:
             # calculate the constrained reward
             # rewards, _, info = self.constrained_reward(rhos, edge, terminal, old_buchis,\
             #                                   old_next_buchis, rewards)
-            
+            if self.num_updates_called >= 2950 and self.num_updates_called % 25 == 0:
+                import pdb; pdb.set_trace()
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
@@ -161,7 +157,8 @@ class PPO:
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
-            loss = policy_grad + 0.5*val_loss #- 0.01*entropy_loss 
+
+            loss = policy_grad + 0.5*val_loss - 0.01*entropy_loss 
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
@@ -179,7 +176,7 @@ class PPO:
         # if self.num_updates_called > 125 and self.num_updates_called % 25 == 0:
         #     import pdb; pdb.set_trace()
         self.buffer.clear()
-        return loss.mean(), {"policy_grad": policy_grad.mean(), "val_loss": val_loss.item()}
+        return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
@@ -220,7 +217,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         rhos = info['rho']
         edge = info['edge']
         terminal = info['is_rejecting']
-        constrained_reward, _, rew_info = env.constrained_reward(rhos, edge, terminal, state['buchi'], next_state['buchi'], mdp_reward)
+        constrained_reward, _, rew_info = env.constrained_reward(rhos, terminal, state['buchi'], next_state['buchi'], mdp_reward)
         if testing & visualize:
             s = torch.tensor(next_state['mdp']).type(torch.float)
             b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -303,12 +300,9 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
 
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
     agent = PPO(
-        stl_tree,
-        env.mdp.rho_alphabet,
         env.observation_space, 
         env.action_space, 
         param['gamma'], 
-        env.automaton.accepting_sets,
         param, 
         to_hallucinate)
     
@@ -365,6 +359,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
                     #  'TimestepsAlive': avg_timesteps,
                     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                      'ActionTemp': agent.temp,
+                     'EntropyLoss': loss_info["entropy_loss"]
                      })
             
             # avg_timesteps = t #np.mean(timesteps)

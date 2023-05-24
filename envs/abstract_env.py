@@ -163,26 +163,27 @@ class Simulator(gym.Env):
                 accepting_rejecting_neutral = 0
             return automaton_state, accepting_rejecting_neutral
     
-    def ltl_reward_1_scalar(self, rhos, edge, terminal, b, b_):
+    def ltl_reward_1_scalar(self, rhos, terminal, b, b_):
         if terminal: #took sink
             return 0, True
         if b_ in self.automaton.automaton.accepting_states:
             return 1, False
         return 0, False
 
-    def ltl_reward_1(self, rhos, edge, terminal, b, b_):
+    def ltl_reward_1(self, rhos, terminal, b, b_):
         # print(f"b_ shape: {b_.shape}")
         # print(f"accepting states: {self.accepting_states}")
         if isinstance(b_, torch.TensorType): 
             b_device = b_.device
             return b_.cpu().apply_(lambda x: x in self.automaton.automaton.accepting_states).float().to(b_device), terminal
         else:
-            return self.ltl_reward_1_scalar(rhos, edge, terminal, b, b_)
+            return self.ltl_reward_1_scalar(rhos, terminal, b, b_)
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
-    def ltl_reward_2(self, rhos, edge, terminal, b, b_):
+    def ltl_reward_2(self, rhos, terminal, b, b_):
         if terminal: #took sink
-            return -1, True
+            return 0, True
+            #return -1, True
         
         if b in self.buchi_cycle:
             if b_ == self.buchi_cycle[b][0].child.id:
@@ -192,7 +193,7 @@ class Simulator(gym.Env):
         else: # epsilon transition
             return 0, False
 
-    def ltl_reward_3(self, rhos, edge, terminal, b, b_):
+    def ltl_reward_3(self, rhos, terminal, b, b_):
         if terminal: #took sink
             return -1, True
         
@@ -226,7 +227,6 @@ class Simulator(gym.Env):
 
     def constrained_reward(self, 
                             rhos, 
-                            edge, 
                             terminal, 
                             b, 
                             b_, 
@@ -235,7 +235,7 @@ class Simulator(gym.Env):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
         #if edge in self.buchi_cycle.values():
-        ltl_reward, done = self.ltl_reward_2(rhos, edge, terminal, b, b_) #TODO: manually set this for now
+        ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
         return mdp_reward + self.lambda_val * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
     
