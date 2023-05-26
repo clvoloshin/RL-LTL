@@ -1,0 +1,10 @@
+env:
+  file: <class 'envs.mc.mc'>
+logger:
+  dir_name: MC
+eps: 10
+gamma: .99
+delta: .1
+seeds:
+- 1
+- 2

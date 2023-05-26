@@ -1,0 +1,31 @@
+env:
+  file: <class 'envs.simple_graph.simple_graph'>
+  J: 20
+  c_min: 1
+logger:
+  dir_name: simple_graph
+ltl:
+  formula: (G F r1) & (G F r2)
+  oa_type: ldba
+  rabinizer: ./rabinizer4/bin/ltl2ldba
+q_learning:
+  batches_per_update: 20
+  batch_size: 128
+  update_freq__n_episodes: 1
+  init_temp: .5
+  temp_decay_freq__n_episodes: 25
+  temp_decay_type: 'linear'
+  temp_decay_rate: .05
+  min_action_temp: 0.
+testing:
+  testing_freq__n_episodes: 1
+  num_rollouts: 1
+gamma: .99
+n_grad_updates: 1
+n_traj: 1000
+delta: .1
+n_seeds: 3
+init_seed: 314
+T: 100
+replay_buffer_size: 50000
+#Example from: https://arxiv.org/pdf/2010.06797.pdf
