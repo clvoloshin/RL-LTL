@@ -1,6 +1,6 @@
 ## Getting started
 
-### Installation
+# Installation
 
 For a self-contained installation, follow the following instructions.
 
@@ -12,6 +12,7 @@ pip3 install --upgrade pip
 pip3 install -r requirements.txt
 ```
 
+## LTL to Buchi Requirement 1:
 Download SPOT and unzip to the current directory:
 https://spot.lrde.epita.fr/install.html
 
@@ -27,20 +28,18 @@ cp -r $dir/lib/python3.10/site-packages/* $dir/ltl-env/lib/python3.10/site-packa
 rm spot-2.10.4.tar.gz 
 ```
 
+## LTL to Buchi Requirement 2:
 Download and unzip Rabinizer to current directory:
 https://www7.in.tum.de/~kretinsk/rabinizer4.html
 
 Note: Must have java >8 installed as well to run Rabinizer.
 
-### Examples
+# Run:
 
+```
+python3 run.py <YOUR CONFIGURATION HERE, Stored in ./cfgs/>.yaml --restart
+```
+For example:
 ```
 python3 run.py flatworld_continuous.yaml --restart
-```
-
-```
-export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI
-export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI/carla/
-export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI/carla/dist/carla-0.9.13-py3.7-linux-x86_64.egg
-export PYTHONPATH=$PYTHONPATH:/home/cameronvoloshin/ContinuousLTL/Carla_9_13/PythonAPI/agents
 ```
