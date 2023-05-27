@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from utls.plotutils import plotlive
+from moviepy.video.io.bindings import mplfig_to_npimage
+
 fontsize = 24
 matplotlib.rc('xtick', labelsize=fontsize) 
 matplotlib.rc('ytick', labelsize=fontsize) 
@@ -75,7 +77,7 @@ class FlatWorld(gym.Env):
         self.circles = [(self.obs_1, 'r'), (self.obs_4, 'y'), (self.obs_3, 'b')]
 
         self.state = np.array([-1, -1])
-        self.render_mode = render_mode
+        self.render_mode = "human"
         self.fig, self.ax = plt.subplots(1, 1)
         
     def reset(
@@ -189,6 +191,8 @@ class FlatWorld(gym.Env):
 
         if save_dir is not None:
             self.fig.savefig(save_dir)
+        numpy_fig = mplfig_to_npimage(self.fig)  # convert it to a numpy array
+        return numpy_fig
         
         # self.ax.grid()
         # plt.show(block=False)

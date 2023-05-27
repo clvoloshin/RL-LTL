@@ -56,6 +56,7 @@ class Simulator(gym.Env):
     def __init__(self, mdp, automaton):
         self.mdp = mdp
         self.automaton = automaton
+        #import pdb; pdb.set_trace()
         spaces = {
             'mdp': self.mdp.observation_space,
             'buchi': gym.spaces.Discrete(self.automaton.n_states)
@@ -212,7 +213,7 @@ class Simulator(gym.Env):
         # return np.hstack([state, one_hot]), cost, done, info
     
     def render(self, *args, **kw):
-        self.mdp.render(*args, **kw)
+        return self.mdp.render(*args, **kw)
     
     def plot(self, *args, **kwargs):
         try:

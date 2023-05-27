@@ -4,7 +4,6 @@ from torch.distributions import MultivariateNormal
 from torch.distributions import Categorical
 
 import logger
-import matplotlib.pyplot as plt
 from utls.plotutils import plot_something_live
 import numpy as np
 from policies.dqn import Buffer, DQN
@@ -111,6 +110,7 @@ class Q_learning:
             if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
                 self.update_target_network()
                 self.iterations_since_last_target_update = 0
+            return loss.item()
 
 def rollout(env, agent, param, i_episode, testing=False, visualize=False):
     state, _ = env.reset()
@@ -174,7 +174,6 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False):
 def run_Q_continuous(param, env, second_order = False):
     
     agent = Q_learning(env.observation_space, env.action_space, param['gamma'], param)
-    fig, axes = plt.subplots(2, 1)
     history = []
     success_history = []
     running_reward = 10
@@ -198,21 +197,20 @@ def run_Q_continuous(param, env, second_order = False):
     
         if i_episode % 1 == 0:
             avg_timesteps = t #np.mean(timesteps)
-            history += [disc_ep_reward]
-            # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
-            success_history += [test_data[:, 0].mean()]
-            method = 'TR' if second_order else 'Adam'
-            plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
-            logger.logkv('Iteration', i_episode)
-            logger.logkv('Method', method)
-            logger.logkv('Success', success_history[-1])
-            logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
-            logger.logkv('EpisodeReward', ep_reward)
-            logger.logkv('DiscEpisodeReward', disc_ep_reward)
-            logger.logkv('TimestepsAlive', avg_timesteps)
-            logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['T'])
-            logger.logkv('ActionTemp', agent.temp)
+            # history += [disc_ep_reward]
+            # # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
+            # success_history += [test_data[:, 0].mean()]
+            # method = 'TR' if second_order else 'Adam'
+            # plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
+            # logger.logkv('Iteration', i_episode)
+            # logger.logkv('Method', method)
+            # logger.logkv('Success', success_history[-1])
+            # logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
+            # logger.logkv('EpisodeReward', ep_reward)
+            # logger.logkv('DiscEpisodeReward', disc_ep_reward)
+            # logger.logkv('TimestepsAlive', avg_timesteps)
+            # logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['T'])
+            # logger.logkv('ActionTemp', agent.temp)
             
-            logger.dumpkvs()
+            # logger.dumpkvs()
             
-    plt.close()

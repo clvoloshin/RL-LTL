@@ -1,7 +1,11 @@
 env:
-  file: <class 'envs.flatworld.flatworld'>
+  _target_: 'envs.base_envs.flatworld.FlatWorld'
+  render_mode: 'human'
+classes:
+  discrete: <class 'envs.flatworld.flatworld'>
+  continuous: <class 'envs.flatworld.flatworld_continuous'>
 logger:
-  dir_name: FlatWorld
+  dir_name: flatworld_q
 ltl:
   autobuild: False
   formula: "G F (y & X F r) & G!b"
@@ -17,7 +21,9 @@ q_learning:
   temp_decay_type: 'exponential'
   min_action_temp: .15
   lr: .001
+  n_traj: 10000
   iterations_per_target_update: 15
+  T: 50
 testing:
   testing_freq__n_episodes: 1
   num_rollouts: 1

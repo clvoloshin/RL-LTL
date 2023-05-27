@@ -85,6 +85,7 @@ class DQN(nn.Module):
             
         # Mask actions not available
         self.mask = torch.ones((env_space['buchi'].n, act_space['total'])).type(torch.bool)
+        #import pdb; pdb.set_trace()
         if act_space['total'] != act_space['mdp'].n:
             for buchi in range(env_space['buchi'].n):
                 try:

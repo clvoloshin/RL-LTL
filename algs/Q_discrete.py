@@ -4,7 +4,6 @@ from torch.distributions import MultivariateNormal
 from torch.distributions import Categorical
 
 import logger
-import matplotlib.pyplot as plt
 from utls.plotutils import plot_something_live
 import numpy as np
 import numpy.ma as ma
@@ -122,11 +121,11 @@ class Q_learning:
         for _ in range(self.n_batches):
             s, b, a, r, s_, b_ = self.buffer.sample(self.batch_size)
             self.Q[s.astype(int), b.astype(int), a.astype(int)] = r + self.gamma * self.Q[s_.astype(int), b_.astype(int)].max(axis=1)
+        return 0
         
 def run_Q_discrete(param, env, second_order = False):
     
     agent = Q_learning(env.observation_space, env.action_space, param['gamma'], param)
-    fig, axes = plt.subplots(2, 1)
     history = []
     success_history = []
     running_reward = 10
@@ -203,4 +202,3 @@ def run_Q_discrete(param, env, second_order = False):
             agent.decay_temp(param['q_learning']['temp_decay_rate'], param['q_learning']['min_action_temp'])
     
         
-    plt.close()
