@@ -178,6 +178,8 @@ class PPO:
             # rewards, _ = self.reward_funcs(None, None, old_buchis, old_next_buchis, rewards)
             
             # calculate the constrained reward
+            # TODO: fix the reward calculation and use it to estimate the value function
+            # TODO: store the ltl reward in the buffer
             rewards, _ = self.constrained_reward(rhos, edge, terminal, old_buchis,\
                                               old_next_buchis, rewards)
             
@@ -206,12 +208,13 @@ class PPO:
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
-            loss = policy_grad + 0.5*val_loss #- 0.01*entropy_loss 
+            loss = policy_grad + 0.5 * val_loss #- 0.01*entropy_loss 
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
             logger.logkv('rewards', rewards.mean())
             # take gradient step
+
             self.optimizer.zero_grad()
             loss.mean().backward()
             # torch.nn.utils.clip_grad_norm_(self.policy.actor.parameters(), max_norm=2.0, norm_type=2)
@@ -222,7 +225,7 @@ class PPO:
 
         # clear buffer
         self.buffer.clear()
-        return loss.mean(), {"policy_grad": policy_grad.mean(), "val_loss": val_loss.item()}
+        return loss.mean().item(), {"policy_grad": policy_grad.mean(), "val_loss": val_loss.item()}
     
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
