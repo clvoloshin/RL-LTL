@@ -164,6 +164,7 @@ class PPO:
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
             logger.logkv('rewards', crewards.mean())
             # take gradient step
+
             self.optimizer.zero_grad()
             loss.mean().backward()
             # torch.nn.utils.clip_grad_norm_(self.policy.actor.parameters(), max_norm=2.0, norm_type=2)
