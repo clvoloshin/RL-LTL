@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 import gym
 import gym.spaces
 import numpy as np
+import torch
 from copy import deepcopy
 import time
 
@@ -53,7 +54,7 @@ class AbstractEnv(metaclass=ABCMeta):
         return T, C
 
 class Simulator(gym.Env):
-    def __init__(self, mdp, automaton):
+    def __init__(self, mdp, automaton, lambda_val, buchi_cycle=None):
         self.mdp = mdp
         self.automaton = automaton
         spaces = {
@@ -78,6 +79,8 @@ class Simulator(gym.Env):
         self.accepting_states = set()
         self.rejecting_states = set()
         self.inf_often = []
+        self.lambda_val = lambda_val
+        self.buchi_cycle = buchi_cycle
     
     def unnormalize(self, states):
         try:
@@ -134,7 +137,7 @@ class Simulator(gym.Env):
             current_aut_state = self.automaton.get_state()
             label, _ = self.mdp.label(mdp_state)
             self.automaton.set_state(desired_current_aut_state)
-            automaton_state = self.automaton.step(label)
+            automaton_state, edge = self.automaton.step(label)
             self.automaton.set_state(current_aut_state)
             # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
             if (automaton_state in self.automaton.automaton.accepting_states):
@@ -148,8 +151,8 @@ class Simulator(gym.Env):
             current_aut_state = self.automaton.get_state()
             label, _ = self.mdp.label(mdp_state)
             self.automaton.set_state(desired_current_aut_state)
-            automaton_state = self.automaton.epsilon_step(eps_action)
-            automaton_state = self.automaton.step(label) # Do we take this step right now???
+            automaton_state, edge = self.automaton.epsilon_step(eps_action)
+            automaton_state, edge = self.automaton.step(label) # Do we take this step right now???
             self.automaton.set_state(current_aut_state)
             # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
             if (automaton_state in self.automaton.automaton.accepting_states):
@@ -159,6 +162,82 @@ class Simulator(gym.Env):
             else:
                 accepting_rejecting_neutral = 0
             return automaton_state, accepting_rejecting_neutral
+    
+    def ltl_reward_1_scalar(self, rhos, terminal, b, b_):
+        if terminal: #took sink
+            return 0, True
+        if b_ in self.automaton.automaton.accepting_states:
+            return 1, False
+        return 0, False
+
+    def ltl_reward_1(self, rhos, terminal, b, b_):
+        # print(f"b_ shape: {b_.shape}")
+        # print(f"accepting states: {self.accepting_states}")
+        if isinstance(b_, torch.TensorType): 
+            b_device = b_.device
+            return b_.cpu().apply_(lambda x: x in self.automaton.automaton.accepting_states).float().to(b_device), terminal
+        else:
+            return self.ltl_reward_1_scalar(rhos, terminal, b, b_)
+        # return torch.isin(b_, self.accepting_states).float(), terminal
+
+    def ltl_reward_2(self, rhos, terminal, b, b_):
+        if terminal: #took sink
+            return 0, True
+            #return -1, True
+        
+        if b in self.buchi_cycle:
+            if b_ == self.buchi_cycle[b][0].child.id:
+                return 1, False
+            else:
+                return 0, False
+        else: # epsilon transition
+            return 0, False
+
+    def ltl_reward_3(self, rhos, terminal, b, b_):
+        if terminal: #took sink
+            return -1, True
+        
+        if b in self.buchi_cycle:
+            reward_func = self.buchi_cycle[b][0]
+            r = self.evaluate_buchi_edge(reward_func.stl, rhos)
+            return r, False
+        else: # epsilon transition
+            return 0, False
+    
+    def evaluate_buchi_edge(self, ast_node, rhos):
+        cid = ast_node.id
+        if cid == 'True':
+            return 1
+        elif cid == 'False':
+            return -1
+        elif cid == "rho":
+            # evaluate the robustness function using the rho belonging to that node
+            phi_val = rhos[self.mdp.rho_alphabet.index(ast_node.rho)]
+            return phi_val
+        elif cid in ["&", "|"]:
+            all_phi_vals = []
+            for child in ast_node.children:
+                all_phi_vals.append(self.evaluate_buchi_edge(child, rhos))
+            # and case and or case are min and max, respectively
+            phi_val = min(all_phi_vals) if cid == "&" else max(all_phi_vals)
+            return phi_val
+        elif cid in ["~", "!"]:  # negation case
+            phi_val = self.evaluate_buchi_edge(ast_node.children[0], rhos)
+            return -1 * phi_val
+
+    def constrained_reward(self, 
+                            rhos, 
+                            terminal, 
+                            b, 
+                            b_, 
+                            mdp_reward
+                            ):
+        # will have multiple choices of reward structure
+        # TODO: add an automatic structure selection mechanism
+        #if edge in self.buchi_cycle.values():
+        ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
+        #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
+        return mdp_reward + self.lambda_val * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
     
     # @timeit
     def step(self, action, is_eps=False):

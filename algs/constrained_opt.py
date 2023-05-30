@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+
 class ConstrainedOptimization():
     
     def __init__(self, param, runner, env) -> None:

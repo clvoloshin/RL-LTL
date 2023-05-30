@@ -28,21 +28,13 @@ print("=========================================================================
 
 class PPO:
     def __init__(self, 
-            reward_funcs,
-            tree,
-            rho_alphabet,
             env_space, 
             act_space, 
             gamma, 
-            accepting_states,
             param, 
             to_hallucinate=False
             ) -> None:
 
-        self.stl_tree = tree
-        self.reward_funcs = reward_funcs
-        self.rho_alphabet = rho_alphabet
-        self.accepting_states = accepting_states
         lr_actor = param['ppo']['lr_actor']
         lr_critic = param['ppo']['lr_critic']
         self.K_epochs = param['ppo']['K_epochs']
@@ -56,7 +48,8 @@ class PPO:
         
         self.optimizer = torch.optim.Adam([
                         {'params': self.policy.actor.parameters(), 'lr': lr_actor},
-                        {'params': self.policy.main_head.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.mean_head.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.log_std_head.parameters(), 'lr': lr_actor},
                         {'params': self.policy.action_switch.parameters(), 'lr': lr_actor},
                         {'params': self.policy.critic.parameters(), 'lr': lr_critic},
                     ])
@@ -104,50 +97,8 @@ class PPO:
             self.temp = min_temp
         
         self.temp = round(self.temp, 4)
-        print(f'Setting temperature: {self.temp}')
+        #print(f'Setting temperature: {self.temp}')
         self.set_action_std(self.temp)
-    
-    def ltl_reward_1_scalar(self, rhos, edge, terminal, b, b_):
-        if terminal: #took sink
-            return 0, True
-        if b_ in self.accepting_states:
-            return 1, False
-        return 0, False
-
-    def ltl_reward_1(self, rhos, edge, terminal, b, b_, testing=False):
-        # print(f"b_ shape: {b_.shape}")
-        # print(f"accepting states: {self.accepting_states}")
-        if testing:
-          return self.ltl_reward_1_scalar(rhos, edge, terminal, b, b_)  
-        b_device = b_.device
-        return b_.cpu().apply_(lambda x: x in self.accepting_states).float().to(b_device), terminal
-        # return torch.isin(b_, self.accepting_states).float(), terminal
-
-    def ltl_reward_3(self, rhos, edge, terminal, b, b_):
-        if terminal: #took sink
-            return -1, True
-        
-        if b in self.reward_funcs:
-            reward_func = self.reward_funcs[b][0]
-            r = self.recurse_node(reward_func.stl, None, None, None, rhos, None, None)
-            return r, False
-        else: # epsilon transition
-            return 0, False
-    
-    def constrained_reward(self, 
-                           rhos, 
-                           edge, 
-                           terminal, 
-                           b, 
-                           b_, 
-                           mdp_reward
-                           ):
-        # will have multiple choices of reward structure
-        # TODO: add an automatic structure selection mechanism
-        ltl_reward, done = self.ltl_reward_1(rhos, edge, terminal, b, b_)
-        edge_lambda = 0. #TODO: manually set this for now
-        #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
-        return mdp_reward + edge_lambda * ltl_reward, done
 
     def update(self):
         self.num_updates_called += 1
@@ -163,7 +114,7 @@ class PPO:
             
             # TODO: update the RolloutBuffer to return rhos, edge, terminal
             old_states, old_buchis, old_actions, old_next_buchis, rewards, \
-                old_action_idxs, old_logprobs, rhos, edge, terminal \
+                lrewards, crewards, old_action_idxs, old_logprobs, old_rhos, old_edges, old_terminals \
                     = self.buffer.get_torch_data(
                         self.gamma, self.batch_size
                     )
@@ -178,11 +129,10 @@ class PPO:
             # rewards, _ = self.reward_funcs(None, None, old_buchis, old_next_buchis, rewards)
             
             # calculate the constrained reward
-            # TODO: fix the reward calculation and use it to estimate the value function
-            # TODO: store the ltl reward in the buffer
-            rewards, _ = self.constrained_reward(rhos, edge, terminal, old_buchis,\
-                                              old_next_buchis, rewards)
-            
+            # rewards, _, info = self.constrained_reward(rhos, edge, terminal, old_buchis,\
+            #                                   old_next_buchis, rewards)
+            if self.num_updates_called >= 2950 and self.num_updates_called % 25 == 0:
+                import pdb; pdb.set_trace()
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
@@ -194,25 +144,25 @@ class PPO:
             ratios = torch.exp(logprobs - old_logprobs.detach())
 
             # Finding Surrogate Loss
-            advantages = rewards - state_values.detach()
+            advantages = crewards - state_values.detach()
 
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
 
             # final loss of clipped objective PPO
             policy_grad = -torch.min(surr1, surr2) 
-            val_loss = self.MseLoss(state_values, rewards) 
+            val_loss = self.MseLoss(state_values, crewards) 
             entropy_loss = dist_entropy
-            
             # if (rewards == 0).all():
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
-            loss = policy_grad + 0.5 * val_loss #- 0.01*entropy_loss 
+
+            loss = policy_grad + 0.5*val_loss - 0.01*entropy_loss 
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
-            logger.logkv('rewards', rewards.mean())
+            logger.logkv('rewards', crewards.mean())
             # take gradient step
 
             self.optimizer.zero_grad()
@@ -224,8 +174,10 @@ class PPO:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
         # clear buffer
+        # if self.num_updates_called > 125 and self.num_updates_called % 25 == 0:
+        #     import pdb; pdb.set_trace()
         self.buffer.clear()
-        return loss.mean().item(), {"policy_grad": policy_grad.mean(), "val_loss": val_loss.item()}
+        return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
@@ -266,7 +218,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         rhos = info['rho']
         edge = info['edge']
         terminal = info['is_rejecting']
-        ltl_reward, _ = agent.ltl_reward_1(rhos, edge, terminal, None, next_state['buchi'], testing=True)  #TODO: fix None and fix testing
+        constrained_reward, _, rew_info = env.constrained_reward(rhos, terminal, state['buchi'], next_state['buchi'], mdp_reward)
         if testing & visualize:
             s = torch.tensor(next_state['mdp']).type(torch.float)
             b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -278,14 +230,15 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             #     pass
             # print(action)
             # print(agent.Q(s, b))
-
         # tic = time.time()
         agent.buffer.add_experience(
             env, 
             state['mdp'], 
             state['buchi'], 
             action, 
-            mdp_reward, 
+            mdp_reward,
+            rew_info["ltl_reward"],
+            constrained_reward, 
             next_state['mdp'], 
             next_state['buchi'], 
             action_idx, 
@@ -300,8 +253,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # if visualize:
         #     env.render()
         # agent.buffer.atomics.append(info['signal'])
-        mdp_ep_reward += mdp_reward
-        ltl_ep_reward += ltl_reward
+        mdp_ep_reward += rew_info["mdp_reward"]
+        ltl_ep_reward += rew_info["ltl_reward"]
         disc_ep_reward += param['gamma']**(t-1) * mdp_reward # TODO: change this to represent combined reward
 
         states.append(next_state['mdp'])
@@ -348,20 +301,16 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
 
     stl_tree = parse_stl_into_tree(param['ltl']['formula'])
     agent = PPO(
-        constrained_rew_fxn,
-        stl_tree,
-        env.mdp.rho_alphabet,
         env.observation_space, 
         env.action_space, 
         param['gamma'], 
-        env.automaton.accepting_sets,
         param, 
         to_hallucinate)
     
-    fig, axes = plt.subplots(2, 1)
-    history = []
-    success_history = []
-    disc_success_history = []
+    # fig, axes = plt.subplots(2, 1)
+    # history = []
+    # success_history = []
+    # disc_success_history = []
     fixed_state, _ = env.reset()
 
     for i_episode in tqdm(range(param['ppo']['n_traj'])):
@@ -411,6 +360,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
                     #  'TimestepsAlive': avg_timesteps,
                     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                      'ActionTemp': agent.temp,
+                     'EntropyLoss': loss_info["entropy_loss"]
                      })
             
             # avg_timesteps = t #np.mean(timesteps)
