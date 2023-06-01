@@ -317,7 +317,7 @@ class ActorCritic(nn.Module):
 
         has_continuous_action_space = True
         self.has_continuous_action_space = has_continuous_action_space        
-        
+        self.temp = action_std_init
         if has_continuous_action_space:
             self.action_dim = action_dim['mdp'].shape[0]
             self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init, requires_grad=True).to(device)
@@ -380,6 +380,7 @@ class ActorCritic(nn.Module):
         
     def set_action_std(self, new_action_std):
         if self.has_continuous_action_space:
+            self.temp = new_action_std
             self.action_var = torch.full((self.action_dim,), new_action_std * new_action_std, requires_grad=True).to(device)
         else:
             print("--------------------------------------------------------------------------------------------")
@@ -427,8 +428,11 @@ class ActorCritic(nn.Module):
             act_or_eps = action_or_eps.sample()
 
             if act_or_eps == 0:
-                std = action_log_std.exp()
-                cov_mat = torch.diag_embed(std)
+                if self.temp > 0.5: # TODO: un-hard code:
+                    cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
+                else:
+                    std = action_log_std.exp()
+                    cov_mat = torch.diag_embed(std)
                 dist = MultivariateNormal(action_mean, cov_mat)
                 action = dist.rsample()
 
@@ -468,6 +472,7 @@ class ActorCritic(nn.Module):
             action_head = self.mean_head(body)
             action_means = torch.reshape(action_head, (-1,) + self.main_shp)
             action_mean = torch.take_along_dim(action_means, buchi, dim=1).squeeze()
+            #import pdb; pdb.set_trace()
             action_log_std_head = self.log_std_head(body)
             action_log_stds = torch.reshape(action_log_std_head, (-1,) + self.main_shp)
             action_log_std = torch.take_along_dim(action_log_stds, buchi, dim=1).squeeze()

@@ -11,6 +11,7 @@ from algs.Q_value_iter_2 import run_value_iter
 from algs.constrained_opt import ConstrainedOptimization
 from algs.ppo_continuous import run_ppo_continuous
 from algs.ppo_continuous_2 import run_ppo_continuous_2
+from algs.sac_learning import run_sac
 ROOT = Path(__file__).parent
 
 @hydra.main(config_path=str(ROOT / "cfgs"))
@@ -30,7 +31,7 @@ def main(cfg):
         # run_Q_STL(cfg, run, sim)
         # copt = ConstrainedOptimization(cfg, run, sim)
 
-        
+        #run_sac(cfg, run, sim)
         run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True)
         # run_value_iter(cfg, run, sim)
     print(cfg)

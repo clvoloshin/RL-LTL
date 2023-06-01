@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import numpy.ma as ma
 import torch.nn.functional as F
-from torch.distributions import Normal, Categorical
+from torch.distributions import Normal, Categorical, MultivariateNormal
 
 # Adapted from https://github.com/pranz24/pytorch-soft-actor-critic
 
@@ -143,7 +143,7 @@ class QNetwork(nn.Module):
 
         # Q1 architecture
         self.q1 = nn.Sequential(
-                        nn.Linear(env_space['mdp'].shape[0] + act_space['total'], 128),
+                        nn.Linear(env_space['mdp'].shape[0] + act_space['mdp'].shape[0], 128),
                         nn.ReLU(),
                         nn.Linear(128, 128),
                         nn.ReLU(),
@@ -151,7 +151,7 @@ class QNetwork(nn.Module):
                     )
         # Q2 architecture
         self.q2 = nn.Sequential(
-                        nn.Linear(env_space['mdp'].shape[0] + act_space['total'], 128),
+                        nn.Linear(env_space['mdp'].shape[0] + act_space['mdp'].shape[0], 128),
                         nn.ReLU(),
                         nn.Linear(128, 128),
                         nn.ReLU(),
@@ -160,31 +160,32 @@ class QNetwork(nn.Module):
         self.shp = (env_space['buchi'].n, act_space['total'])
             
         # Mask actions not available
-        self.mask = torch.ones((env_space['buchi'].n, act_space['total'])).type(torch.bool)
-        if act_space['total'] > 1:
-            for buchi in range(env_space['buchi'].n):
-                try:
-                    eps = act_space['total'] - 1 + env_space['buchi'].n
-                except:
-                    eps = act_space['total'] - 1
-                self.mask[buchi, eps:] = False    
+        # self.mask = torch.ones((env_space['buchi'].n, act_space['total'])).type(torch.bool)
+        # if act_space['total'] > 1:
+        #     for buchi in range(env_space['buchi'].n):
+        #         try:
+        #             eps = act_space['total'] - 1 + env_space['buchi'].n
+        #         except:
+        #             eps = act_space['total'] - 1
+        #         self.mask[buchi, eps:] = False    
 
         self.gamma = param['gamma']
 
-    def forward_one(self, state, buchi, q=1, to_mask=True):
+    def forward_one(self, state, buchi, q=1): #, to_mask=True):
         model = self.q1 if q == 1 else self.q2
+        #import pdb; pdb.set_trace()
         all_qs = torch.reshape(model(state), (-1,) + self.shp)
-        qs = torch.take_along_dim(all_qs, buchi, dim=1).squeeze()
-        if to_mask:
-            out = torch.masked.MaskedTensor(qs, self.mask[buchi].squeeze())
-        else:
-            out = qs
-        return out
+        qs = torch.take_along_dim(all_qs, buchi.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
+        # if to_mask:
+        #     out = torch.masked.MaskedTensor(qs, self.mask[buchi].squeeze())
+        # else:
+        #     out = qs
+        return qs
     
     def forward(self, state, buchi, action, to_mask=True):
         xu = torch.cat([state, action], 1)
-        q1 = self.forward_one(xu, buchi, q=1, to_mask=to_mask)
-        q2 = self.forward_one(xu, buchi, q=2, to_mask=to_mask)
+        q1 = self.forward_one(xu, buchi, q=1)#, to_mask=to_mask)
+        q2 = self.forward_one(xu, buchi, q=2)# to_mask=to_mask)
         return q1, q2
 
 
@@ -310,15 +311,20 @@ class GaussianPolicy(nn.Module):
             import pdb; pdb.set_trace()
         act_or_eps = action_or_eps.sample()
         if state.shape[0] > 1: #TODO: resolve dimensionality mismatches with epsilon actions
-            normal = Normal(mean, std)
+            cov_mat = torch.diag_embed(std).to(device)
+
+            normal = MultivariateNormal(mean, cov_mat)  # change to multivariate normal
             x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
-            log_prob = normal.log_prob(x_t) + action_or_eps.log_prob(act_or_eps)
+            #import pdb; pdb.set_trace()
+            action = x_t
+            log_prob = normal.log_prob(x_t) + action_or_eps.log_prob(act_or_eps) # prob_of_non_eps * prob of your actual action
             clipped_action = torch.clip(action, -1, 1)
             action = clipped_action
-            return action, log_prob, mean, act_or_eps
+            return action, log_prob, mean, act_or_eps  # TODO: figure out how to take the act_or_eps action if it is prescribed
             
         if act_or_eps == 0:
-            normal = Normal(mean, std)
+            cov_mat = torch.diag_embed(std).to(device)
+            normal = MultivariateNormal(mean, cov_mat)
             x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
             #y_t = torch.tanh(x_t)
             action = x_t #* self.action_scale + self.action_bias

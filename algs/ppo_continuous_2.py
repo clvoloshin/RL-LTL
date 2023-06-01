@@ -131,8 +131,8 @@ class PPO:
             # calculate the constrained reward
             # rewards, _, info = self.constrained_reward(rhos, edge, terminal, old_buchis,\
             #                                   old_next_buchis, rewards)
-            if self.num_updates_called >= 2950 and self.num_updates_called % 25 == 0:
-                import pdb; pdb.set_trace()
+            # if self.num_updates_called >= 2950 and self.num_updates_called % 25 == 0:
+            #     import pdb; pdb.set_trace()
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
@@ -158,7 +158,7 @@ class PPO:
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
 
-            loss = policy_grad + 0.5*val_loss - 0.01*entropy_loss 
+            loss = policy_grad + 0.5*val_loss - 0.05*entropy_loss 
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())

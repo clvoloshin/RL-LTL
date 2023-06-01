@@ -90,7 +90,6 @@ def rollout(env, agent, param, i_episode, testing=False, visualize=False, to_hal
         
 def run_Q_learning(param, env, second_order = False, continuous_state=True, to_hallucinate=False,
                    stl_critic=False):
-    
     if continuous_state:
         agent = Q_learning_continuous(env.observation_space, env.action_space, param['gamma'], param)
     else:

@@ -77,15 +77,16 @@ class SAC(object):
         next_state_batch = torch.FloatTensor(next_state_batch).to(self.device)
         next_buchi_batch = torch.FloatTensor(next_buchi_batch).to(self.device)
         action_batch = torch.FloatTensor(action_batch).to(self.device)
-        constrained_reward_batch = torch.FloatTensor(constrained_reward_batch).to(self.device).unsqueeze(1)
+        constrained_reward_batch = torch.FloatTensor(constrained_reward_batch).to(self.device)
         terminal_batch = torch.FloatTensor(terminal_batch).to(self.device).unsqueeze(1)
 
         with torch.no_grad():
             next_state_action, next_state_log_pi, _, is_eps = self.policy.sample(next_state_batch, next_buchi_batch)
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             qf1_next_target, qf2_next_target = self.critic_target(next_state_batch, next_buchi_batch, next_state_action)
             min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha * next_state_log_pi
-            next_q_value = reward_batch + terminal_batch * self.gamma * (min_qf_next_target)
+            next_q_value = constrained_reward_batch  + terminal_batch.squeeze() * self.gamma * (min_qf_next_target)
+        #import pdb; pdb.set_trace()
         qf1, qf2 = self.critic(state_batch, buchi_batch, action_batch)  # Two Q-functions to mitigate positive bias in the policy improvement step
         qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
         qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
@@ -166,11 +167,11 @@ def rollout(env, agent, memory, param, i_episode, runner, testing=False, visuali
     mdp_ep_reward = 0
     ltl_ep_reward = 0
     if not testing: memory.restart_traj()
-    if testing & visualize:
-        s = torch.tensor(state['mdp']).type(torch.float)
-        b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
-        print(0, state['mdp'], state['buchi'], agent.Q(s, b).argmax().to_tensor(0).numpy())
-        print(agent.Q(s, b))
+    # if testing & visualize:
+    #     s = torch.tensor(state['mdp']).type(torch.float)
+    #     b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
+    #     print(0, state['mdp'], state['buchi'], agent.Q(s, b).argmax().to_tensor(0).numpy())
+    #     print(agent.Q(s, b))
     
     for t in range(1, param['sac']['T']):  # Don't infinite loop while learning
         action, log_prob, is_eps = agent.select_action(state['mdp'], state['buchi'])
@@ -246,17 +247,17 @@ def run_sac(param, runner, env):
 
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
             num_updates += 1
-            qf1_loss, qf2_loss, policy_loss, _, _  = agent.update_parameters(memory, param['sac']['batch_size'], num_updates).item()
+            qf1_loss, qf2_loss, policy_loss, _, _  = agent.update_parameters(memory, param['sac']['batch_size'], num_updates)
             # all_losses.append(current_loss)
         
-        if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0:
-            agent.decay_temp(param['q_learning']['temp_decay_rate'], param['q_learning']['min_action_temp'], param['q_learning']['temp_decay_type'])
+        # if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0:
+        #     agent.decay_temp(param['q_learning']['temp_decay_rate'], param['q_learning']['min_action_temp'], param['q_learning']['temp_decay_type'])
         
-        if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
-            test_data = []
-            for test_iter in range(param['testing']['num_rollouts']):
-                test_data.append(rollout(env, agent, param, test_iter, runner, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) ))
-            test_data = np.array(test_data)
+        # if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
+        #     test_data = []
+        #     for test_iter in range(param['testing']['num_rollouts']):
+        #         test_data.append(rollout(env, agent, memory, param, test_iter, runner, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) ))
+        #     test_data = np.array(test_data)
 
         # if i_episode % param['checkpoint_freq__n_episodes'] == 0:
         #     ckpt_path = Path(runner.dir) / f'checkpoint_{checkpoint_count}.pt'
@@ -270,7 +271,7 @@ def run_sac(param, runner, env):
             avg_timesteps = t #np.mean(timesteps)
             
             # logger.dumpkvs()
-            runner.log({'Iteration': i_episode,
+            runner.log({
                     'R_LTL': ltl_reward,
                     'R_MDP': mdp_reward,
                     'QF1_Loss': qf1_loss,
@@ -278,6 +279,6 @@ def run_sac(param, runner, env):
                     'Policy_Loss': policy_loss,
                     #  'TimestepsAlive': avg_timesteps,
                     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
-                     'ActionTemp': agent.temp,
+                     #'ActionTemp': agent.temp,
                      })
             
