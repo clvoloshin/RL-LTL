@@ -166,6 +166,7 @@ class Simulator(gym.Env):
     def ltl_reward_1_scalar(self, rhos, terminal, b, b_):
         if terminal: #took sink
             return 0, True
+            #return -1, True
         if b_ in self.automaton.automaton.accepting_states:
             return 1, False
         return 0, False

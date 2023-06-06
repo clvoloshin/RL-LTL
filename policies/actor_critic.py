@@ -318,6 +318,7 @@ class ActorCritic(nn.Module):
         has_continuous_action_space = True
         self.has_continuous_action_space = has_continuous_action_space        
         self.temp = action_std_init
+        self.switch_temp = param['ppo']['switch_action_temp']
         if has_continuous_action_space:
             self.action_dim = action_dim['mdp'].shape[0]
             self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init, requires_grad=True).to(device)
@@ -428,7 +429,7 @@ class ActorCritic(nn.Module):
             act_or_eps = action_or_eps.sample()
 
             if act_or_eps == 0:
-                if self.temp > 0.5: # TODO: un-hard code:
+                if self.temp > self.switch_temp: # refers to a param in the yaml file
                     cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
                 else:
                     std = action_log_std.exp()
