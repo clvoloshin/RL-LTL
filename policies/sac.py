@@ -264,10 +264,11 @@ class GaussianPolicy(nn.Module):
         if state.shape[0] > 1:
             action_mean = torch.reshape(action_mean_head, (-1,) + self.main_shp)
             action_log_std = torch.reshape(action_log_std_head, (-1,) + self.main_shp)
-            action_mean = action_mean[torch.arange(action_mean.shape[0]), buchi_state.long(), :]
-            #action_mean = torch.take_along_dim(action_mean, buchi_state, dim=1).squeeze()
-            action_log_std = action_log_std[torch.arange(action_log_std.shape[0]), buchi_state.long(), :]
-            #action_log_std = torch.take_along_dim(action_log_std, buchi_state, dim=1).squeeze()
+            #action_mean = action_mean[torch.arange(action_mean.shape[0]), buchi_state.long(), :]
+            #torch.take_along_dim(all_qs, buchi.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
+            action_mean = torch.take_along_dim(action_mean, buchi_state.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
+            #action_log_std = action_log_std[torch.arange(action_log_std.shape[0]), buchi_state.long(), :]
+            action_log_std = torch.take_along_dim(action_log_std, buchi_state.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
             action_switch_head_all = torch.reshape(self.action_switch(body), (-1,) + self.shp)
             action_switch = action_switch_head_all#[torch.arange(action_switch_head_all.shape[0]), buchi_state.long(), :]
             #action_switch = torch.take_along_dim(action_switch_head_all, buchi_state, dim=1)
@@ -276,6 +277,7 @@ class GaussianPolicy(nn.Module):
             #mask = torch.take_along_dim(, buchi_state, dim=1)
             probs_all = self.masked_softmax(action_switch, mask, -1)
             probs = probs_all[torch.arange(probs_all.shape[0]), buchi_state.long(), :]
+            probs = torch.take_along_dim(probs_all, buchi_state.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
         else:
             action_mean = torch.reshape(action_mean_head, self.main_shp)[buchi_state]
             action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state]

@@ -80,19 +80,26 @@ class FlatWorld(gym.Env):
         self.obs_3 = np.array([0.0, 0.0, 0.8])            # blue circle in the center
         #self.obs_3 = np.array([0, -2.7/2, 0.35])      # blue circle for REWARD offset from center.
         self.obs_4 = np.array([-1.7/2, .3/2, .3])    # orange box on the left
-        self.obs_5 = np.array([0, -2.7/2, 0.35])     # reward region: purple
-        self.obs_6 = np.array([-2.7/2, 2.7/2, 0.35]) # reward region: 
+        # self.obs_5 = np.array([0, -2.7/2, 0.35])     # reward region: purple
+        # self.obs_6 = np.array([-2.7/2, 2.7/2, 0.35]) # reward region: 
         self.timestep = 0  # set time to keep count of STL values
         
-        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b'), (self.obs_5, 'm'), (self.obs_6, 'c')]
+        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
         #self.circles = [(self.obs_2, 'y'), (self.obs_3, 'b')]
-        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3, 'm': self.obs_5, 'c': self.obs_6}
+        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3}
+        # generate reward regions randomly
+        self.generate_random_rewards()
         self.rho_alphabet = list(self.circles_map.keys())
 
         self.state = np.array([-1, -1])
         self.render_mode = render_mode
         self.fig, self.ax = plt.subplots(1, 1)
         self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
+    
+    def generate_random_rewards(self):
+        reward_regions = np.random.uniform(-2, 2, size=(30, 2))  # TODO: set this to be something different, if needed
+        for region in reward_regions:
+            self.circles.append((np.array([region[0], region[1], .1]), 'm'))
     
     def compute_rho(self):
         # return a map from string to value for each robustness fxn

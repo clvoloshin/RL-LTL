@@ -400,7 +400,7 @@ class ActorCritic(nn.Module):
             action_head = self.mean_head(body)
             action_log_std_head = self.log_std_head(body)
             action_mean = torch.reshape(action_head, self.main_shp)[buchi_state]
-            action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state] / 3.0
+            action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state] / 5.0
 
 
             # action_switch_head_all = torch.reshape(self.action_switch(body), self.shp)
@@ -429,12 +429,13 @@ class ActorCritic(nn.Module):
             act_or_eps = action_or_eps.sample()
 
             if act_or_eps == 0:
-                if self.temp > self.switch_temp: # refers to a param in the yaml file
-                    cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
-                else:
-                    std = action_log_std.exp()
-                    cov_mat = torch.diag_embed(std)
+                # if self.temp > self.switch_temp: # refers to a param in the yaml file
+                #     cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
+                # else:
+                std = action_log_std.exp()
+                cov_mat = torch.diag_embed(std)
                 dist = MultivariateNormal(action_mean, cov_mat)
+                #samp_dist = Normal(action_mean, cov_mat)
                 action = dist.rsample()
 
                 clipped_action = torch.clip(action, -1, 1)
@@ -498,7 +499,6 @@ class ActorCritic(nn.Module):
             action_var = self.action_var.expand_as(action_mean)
             action_std = action_log_std.exp()
             cov_mat = torch.diag_embed(action_std).to(device)
-            #dist = Normal(action_mean, action_std)
             dist = MultivariateNormal(action_mean, cov_mat)
             
             action_logprobs = dist.log_prob(action)
@@ -516,7 +516,7 @@ class ActorCritic(nn.Module):
 
             # Entropy. Overapprox, not exact. RECHECK
             dist_coinflip = dist_coinflip.entropy().squeeze()
-            dist_gaussian = dist.entropy()
+            dist_gaussian = dist.entropy()#.mean()
             dist_entropy = dist_coinflip + dist_gaussian * probs#(action_idxs == 0)
             #dist_entropy = dist_gaussian  #TODO: fix this!
             #import pdb; pdb.set_trace()

@@ -43,6 +43,7 @@ class PPO:
         self.has_continuous_action_space = True
         action_std_init = param['ppo']['action_std']
         self.temp = param['ppo']['action_std']
+        self.ltl_lambda = param['lambda']
 
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
         
@@ -157,8 +158,9 @@ class PPO:
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
+            normalized_val_loss = val_loss / (self.ltl_lambda / (1 - self.gamma))
 
-            loss = policy_grad + 0.5*val_loss - 0.05*entropy_loss 
+            loss = policy_grad + 0.5*normalized_val_loss - 0.25*entropy_loss #TODO: tune the amount we want to regularize entropy
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
@@ -177,7 +179,7 @@ class PPO:
         # if self.num_updates_called > 125 and self.num_updates_called % 25 == 0:
         #     import pdb; pdb.set_trace()
         self.buffer.clear()
-        return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
+        return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": normalized_val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
