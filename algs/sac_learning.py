@@ -34,6 +34,7 @@ class SAC(object):
         self.gamma = param['gamma']
         self.tau = param['sac']['tau']
         self.alpha = param['sac']['alpha']
+        self.ltl_lambda = param['lambda']
 
         self.policy_type = param['sac']['policy_type']
         self.target_update_interval = param['sac']['iterations_per_target_update']
@@ -73,9 +74,9 @@ class SAC(object):
         state_batch, buchi_batch, action_batch, reward_batch, ltl_reward_batch, constrained_reward_batch, next_state_batch, next_buchi_batch, terminal_batch = memory.sample(batchsize=batch_size)
 
         state_batch = torch.FloatTensor(state_batch).to(self.device)
-        buchi_batch = torch.FloatTensor(buchi_batch).to(self.device)
+        buchi_batch = torch.FloatTensor(buchi_batch).to(self.device).unsqueeze(1).unsqueeze(1).long()
         next_state_batch = torch.FloatTensor(next_state_batch).to(self.device)
-        next_buchi_batch = torch.FloatTensor(next_buchi_batch).to(self.device)
+        next_buchi_batch = torch.FloatTensor(next_buchi_batch).to(self.device).unsqueeze(1).unsqueeze(1).long()
         action_batch = torch.FloatTensor(action_batch).to(self.device)
         constrained_reward_batch = torch.FloatTensor(constrained_reward_batch).to(self.device)
         terminal_batch = torch.FloatTensor(terminal_batch).to(self.device).unsqueeze(1)
@@ -84,16 +85,17 @@ class SAC(object):
             next_state_action, next_state_log_pi, _, is_eps = self.policy.sample(next_state_batch, next_buchi_batch)
             #import pdb; pdb.set_trace()
             qf1_next_target, qf2_next_target = self.critic_target(next_state_batch, next_buchi_batch, next_state_action)
-            min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha * next_state_log_pi
+            min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha * next_state_log_pi.squeeze()
             next_q_value = constrained_reward_batch  + terminal_batch.squeeze() * self.gamma * (min_qf_next_target)
         #import pdb; pdb.set_trace()
         qf1, qf2 = self.critic(state_batch, buchi_batch, action_batch)  # Two Q-functions to mitigate positive bias in the policy improvement step
         qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
         qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
         qf_loss = qf1_loss + qf2_loss
+        norm_qf_loss = qf_loss #/ (self.ltl_lambda / (1 - self.gamma))
         #import pdb; pdb.set_trace()
         self.critic_optim.zero_grad()
-        qf_loss.backward()
+        norm_qf_loss.backward()
         self.critic_optim.step()
 
         pi, log_pi, _, is_eps = self.policy.sample(state_batch, buchi_batch)
@@ -124,7 +126,7 @@ class SAC(object):
         if updates % self.target_update_interval == 0:
             soft_update(self.critic_target, self.critic, self.tau)
 
-        return qf1_loss.item(), qf2_loss.item(), policy_loss.item(), alpha_loss.item(), alpha_tlogs.item()
+        return norm_qf_loss.item(), policy_loss.item(), alpha_loss.item(), alpha_tlogs.item()
 
     # Save model parameters
     def save_checkpoint(self, env_name, suffix="", ckpt_path=None):
@@ -166,7 +168,7 @@ def rollout(env, agent, memory, param, i_episode, runner, testing=False, visuali
     buchis.append(state['buchi'])
     mdp_ep_reward = 0
     ltl_ep_reward = 0
-    if not testing: memory.restart_traj()
+    memory.restart_traj()
     # if testing & visualize:
     #     s = torch.tensor(state['mdp']).type(torch.float)
     #     b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -247,7 +249,7 @@ def run_sac(param, runner, env):
 
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
             num_updates += 1
-            qf1_loss, qf2_loss, policy_loss, _, _  = agent.update_parameters(memory, param['sac']['batch_size'], num_updates)
+            qf_loss, policy_loss, _, _  = agent.update_parameters(memory, param['sac']['batch_size'], num_updates)
             # all_losses.append(current_loss)
         
         # if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0:
@@ -274,8 +276,7 @@ def run_sac(param, runner, env):
             runner.log({
                     'R_LTL': ltl_reward,
                     'R_MDP': mdp_reward,
-                    'QF1_Loss': qf1_loss,
-                    'QF2_Loss': qf2_loss,
+                    'QF_Loss': qf_loss,
                     'Policy_Loss': policy_loss,
                     #  'TimestepsAlive': avg_timesteps,
                     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],

@@ -175,7 +175,7 @@ class QNetwork(nn.Module):
         model = self.q1 if q == 1 else self.q2
         #import pdb; pdb.set_trace()
         all_qs = torch.reshape(model(state), (-1,) + self.shp)
-        qs = torch.take_along_dim(all_qs, buchi.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
+        qs = torch.take_along_dim(all_qs, buchi, dim=1).squeeze()
         # if to_mask:
         #     out = torch.masked.MaskedTensor(qs, self.mask[buchi].squeeze())
         # else:
@@ -264,20 +264,13 @@ class GaussianPolicy(nn.Module):
         if state.shape[0] > 1:
             action_mean = torch.reshape(action_mean_head, (-1,) + self.main_shp)
             action_log_std = torch.reshape(action_log_std_head, (-1,) + self.main_shp)
-            #action_mean = action_mean[torch.arange(action_mean.shape[0]), buchi_state.long(), :]
-            #torch.take_along_dim(all_qs, buchi.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
-            action_mean = torch.take_along_dim(action_mean, buchi_state.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
-            #action_log_std = action_log_std[torch.arange(action_log_std.shape[0]), buchi_state.long(), :]
-            action_log_std = torch.take_along_dim(action_log_std, buchi_state.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
+            action_mean = torch.take_along_dim(action_mean, buchi_state, dim=1).squeeze()
+            action_log_std = torch.take_along_dim(action_log_std, buchi_state, dim=1).squeeze()
             action_switch_head_all = torch.reshape(self.action_switch(body), (-1,) + self.shp)
-            action_switch = action_switch_head_all#[torch.arange(action_switch_head_all.shape[0]), buchi_state.long(), :]
-            #action_switch = torch.take_along_dim(action_switch_head_all, buchi_state, dim=1)
+            action_switch = action_switch_head_all
             mask = self.mask.unsqueeze(0).repeat(len(action_switch), 1, 1).to(device)
-            #[torch.arange(action_switch.shape[0]), buchi_state.long(), :]
-            #mask = torch.take_along_dim(, buchi_state, dim=1)
             probs_all = self.masked_softmax(action_switch, mask, -1)
-            probs = probs_all[torch.arange(probs_all.shape[0]), buchi_state.long(), :]
-            probs = torch.take_along_dim(probs_all, buchi_state.unsqueeze(1).unsqueeze(1).long(), dim=1).squeeze()
+            probs = torch.take_along_dim(probs_all, buchi_state, dim=1).squeeze()
         else:
             action_mean = torch.reshape(action_mean_head, self.main_shp)[buchi_state]
             action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state]
@@ -307,38 +300,41 @@ class GaussianPolicy(nn.Module):
         is_eps = False
         mean, log_std, probs = self.forward(state, buchi_state)
         std = log_std.exp()
-        try:
-            action_or_eps = Categorical(probs)
-        except:
-            import pdb; pdb.set_trace()
-        act_or_eps = action_or_eps.sample()
+        # try:
+        #     action_or_eps = Categorical(probs)
+        # except:
+        #     import pdb; pdb.set_trace()
         if state.shape[0] > 1: #TODO: resolve dimensionality mismatches with epsilon actions
-            cov_mat = torch.diag_embed(std).to(device)
-
-            normal = MultivariateNormal(mean, cov_mat)  # change to multivariate normal
+            action_or_eps = Categorical(probs.unsqueeze(-1))
+            #cov_mat = torch.diag_embed(std).to(device)
+            act_or_eps = action_or_eps.sample()
+            normal = Normal(mean, std)  # change to multivariate normal
             x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
             #import pdb; pdb.set_trace()
             action = x_t
-            log_prob = normal.log_prob(x_t) + action_or_eps.log_prob(act_or_eps) # prob_of_non_eps * prob of your actual action
+            log_prob = normal.log_prob(x_t) + torch.tile(action_or_eps.log_prob(act_or_eps).unsqueeze(-1), (1, x_t.shape[-1])) # prob_of_non_eps * prob of your actual action
+            log_prob = log_prob.sum(1, keepdim=True)
             clipped_action = torch.clip(action, -1, 1)
             action = clipped_action
             return action, log_prob, mean, act_or_eps  # TODO: figure out how to take the act_or_eps action if it is prescribed
-            
-        if act_or_eps == 0:
-            cov_mat = torch.diag_embed(std).to(device)
-            normal = MultivariateNormal(mean, cov_mat)
-            x_t = normal.sample()  # for reparameterization trick (mean + std * N(0,1))
-            #y_t = torch.tanh(x_t)
-            action = x_t #* self.action_scale + self.action_bias
-            log_prob = normal.log_prob(x_t) + action_or_eps.log_prob(act_or_eps)
-
-            clipped_action = torch.clip(action, -1, 1)
-            action = clipped_action
-
         else:
-            is_eps = True
-            action = act_or_eps
-            log_prob = action_or_eps.log_prob(act_or_eps)
+            action_or_eps = Categorical(probs)
+            act_or_eps = action_or_eps.sample()
+            if act_or_eps == 0:
+                #cov_mat = torch.diag_embed(std).to(device)
+                normal = Normal(mean, std)
+                x_t = normal.sample()  # for reparameterization trick (mean + std * N(0,1))
+                #y_t = torch.tanh(x_t)
+                action = x_t #* self.action_scale + self.action_bias
+                log_prob = normal.log_prob(x_t) + torch.tile(action_or_eps.log_prob(act_or_eps), x_t.shape)
+
+                clipped_action = torch.clip(action, -1, 1)
+                action = clipped_action
+
+            else:
+                is_eps = True
+                action = act_or_eps
+                log_prob = action_or_eps.log_prob(act_or_eps)
 
         # Enforcing Action Bound
         #log_prob = log_prob.sum(1, keepdim=True)
