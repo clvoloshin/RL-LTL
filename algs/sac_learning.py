@@ -91,7 +91,7 @@ class SAC(object):
         qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
         qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
         qf_loss = qf1_loss + qf2_loss
-
+        #import pdb; pdb.set_trace()
         self.critic_optim.zero_grad()
         qf_loss.backward()
         self.critic_optim.step()
@@ -195,7 +195,7 @@ def rollout(env, agent, memory, param, i_episode, runner, testing=False, visuali
                 for buchi_state in range(env.observation_space['buchi'].n):
                     next_buchi_state, is_accepting = env.next_buchi(next_state['mdp'], buchi_state)
                     constrained_reward, _, rew_info = env.constrained_reward(rhos, terminal, state['buchi'], next_state['buchi'], mdp_reward)
-                    memory.add(state['mdp'], buchi_state, action, mdp_reward, rew_info['ltl_reward'], constrained_reward, next_state['mdp'], next_buchi_state, terminal)
+                    memory.add(state['mdp'], buchi_state, action, mdp_reward, rew_info['ltl_reward'], constrained_reward, next_state['mdp'], next_buchi_state, is_accepting == -1)
                     if buchi_state == state['buchi']:
                         reward = is_accepting
                         memory.mark()
@@ -205,7 +205,7 @@ def rollout(env, agent, memory, param, i_episode, runner, testing=False, visuali
                         for eps_idx in range(env.action_space[buchi_state].n):
                             next_buchi_state, is_accepting = env.next_buchi(state['mdp'], buchi_state, eps_idx)
                             constrained_reward, _, rew_info = env.constrained_reward(rhos, terminal, state['buchi'], next_state['buchi'], mdp_reward)
-                            memory.add(state['mdp'], buchi_state, action, mdp_reward, rew_info['ltl_reward'], constrained_reward, next_state['mdp'], next_buchi_state, terminal)
+                            memory.add(state['mdp'], buchi_state, action, mdp_reward, rew_info['ltl_reward'], constrained_reward, next_state['mdp'], next_buchi_state, is_accepting == -1)
                     except:
                         pass
 

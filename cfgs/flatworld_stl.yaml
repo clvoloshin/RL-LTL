@@ -17,7 +17,7 @@ ppo:
   temp_decay_type: 'exponential'
   temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
   min_action_temp: 0.1             # stop decay after action_std <= min_action_std and switch to learned std
-  switch_action_temp: 0.2
+  switch_action_temp: 1.78
   temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
   K_epochs: 1               # update policy for K epochs in one PPO update
   batch_size: 128               # update policy for K epochs in one PPO update
@@ -27,18 +27,18 @@ ppo:
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
   n_traj: 5000
+  alpha: 0.1
   T: 50
 sac:
   action_std: 1.8                   # starting std for action distribution (Multivariate Normal)
   temp_decay_type: 'exponential'
-  temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
+  temp_decay_rate: 0.9      # linearly decay action_std (action_std = action_std - action_std_decay_rate)
   min_action_temp: 0.1             # minimum action_std (stop decay after action_std <= min_action_std)
-  temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
-  K_epochs: 1               # update policy for K epochs in one PPO update
-  batch_size: 128               # update policy for K epochs in one PPO update
+  temp_decay_freq__n_episodes: 100       # action_std decay frequency (in num timesteps)
+  batch_size: 512               # update policy for K epochs in one PPO update
   eps_clip: 0.4          # clip parameter for PPO
   lr_actor: 0.001       # learning rate for actor network
-  lr_critic: 0.01       # learning rate for critic network
+  lr_critic: .00001      # learning rate for critic network
   lr_value: 0.01
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
@@ -72,4 +72,4 @@ n_seeds: 10
 init_seed: 314
 replay_buffer_size: 10000
 checkpoint_freq__n_episodes: 50
-lambda: 50.0
+lambda: 125.0

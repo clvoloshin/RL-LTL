@@ -327,7 +327,7 @@ class GaussianPolicy(nn.Module):
         if act_or_eps == 0:
             cov_mat = torch.diag_embed(std).to(device)
             normal = MultivariateNormal(mean, cov_mat)
-            x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
+            x_t = normal.sample()  # for reparameterization trick (mean + std * N(0,1))
             #y_t = torch.tanh(x_t)
             action = x_t #* self.action_scale + self.action_bias
             log_prob = normal.log_prob(x_t) + action_or_eps.log_prob(act_or_eps)

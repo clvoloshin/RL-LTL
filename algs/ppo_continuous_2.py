@@ -43,6 +43,7 @@ class PPO:
         self.has_continuous_action_space = True
         action_std_init = param['ppo']['action_std']
         self.temp = param['ppo']['action_std']
+        self.alpha = param['ppo']['alpha']
         self.ltl_lambda = param['lambda']
 
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
@@ -160,7 +161,7 @@ class PPO:
             # else:
             normalized_val_loss = val_loss / (self.ltl_lambda / (1 - self.gamma))
 
-            loss = policy_grad + 0.5*normalized_val_loss - 0.25*entropy_loss #TODO: tune the amount we want to regularize entropy
+            loss = policy_grad + 0.5*normalized_val_loss - self.alpha*entropy_loss #TODO: tune the amount we want to regularize entropy
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
