@@ -26,13 +26,13 @@ def main(cfg):
     #G(F(y & X(F(r)))) & G~b
     constrained_rew_fxn = {0: [automaton.edges(0, 1)[0]], 1: [automaton.edges(1, 2)[0]], 2: [automaton.edges(2, 0)[0]]}
 
-    sim = Simulator(env, automaton, cfg['lambda'], buchi_cycle=constrained_rew_fxn)
+    sim = Simulator(env, automaton, cfg['lambda'], buchi_cycle=constrained_rew_fxn, reward_type=cfg['reward_type'])
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True)) as run:
         # run_Q_STL(cfg, run, sim)
         # copt = ConstrainedOptimization(cfg, run, sim)
 
         #run_sac(cfg, run, sim)
-        run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True)
+        run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"])
         # run_value_iter(cfg, run, sim)
     print(cfg)
 

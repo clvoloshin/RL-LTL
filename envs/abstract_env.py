@@ -54,7 +54,7 @@ class AbstractEnv(metaclass=ABCMeta):
         return T, C
 
 class Simulator(gym.Env):
-    def __init__(self, mdp, automaton, lambda_val, buchi_cycle=None):
+    def __init__(self, mdp, automaton, lambda_val, buchi_cycle=None, reward_type=2):
         self.mdp = mdp
         self.automaton = automaton
         spaces = {
@@ -80,6 +80,7 @@ class Simulator(gym.Env):
         self.rejecting_states = set()
         self.inf_often = []
         self.lambda_val = lambda_val
+        self.reward_type = reward_type
         self.buchi_cycle = buchi_cycle
     
     def unnormalize(self, states):
@@ -236,7 +237,10 @@ class Simulator(gym.Env):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
         #if edge in self.buchi_cycle.values():
-        ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
+        if self.reward_type == 1:
+            ltl_reward, done = self.ltl_reward_1(rhos, terminal, b, b_) #TODO: manually set this for now
+        else:
+            ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
         return mdp_reward + self.lambda_val * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
     

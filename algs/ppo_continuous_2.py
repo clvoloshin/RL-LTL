@@ -78,8 +78,9 @@ class PPO:
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state['mdp']).to(device)
             buchi = state['buchi']
-            action, action_idx, is_eps, action_logprob, all_logprobs = self.policy_old.act(state_tensor, buchi)
-
+            action, action_mean, action_idx, is_eps, action_logprob, all_logprobs = self.policy_old.act(state_tensor, buchi)
+            if is_testing:
+                return action_mean, action_idx, is_eps, action_logprob, all_logprobs
             return action, action_idx, is_eps, action_logprob, all_logprobs
         
     def collect(self, s, b, a, r, s_, b_):
@@ -284,7 +285,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     #print(action)
     return mdp_ep_reward, ltl_ep_reward, t
         
-def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False):
+def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False, visualize=True):
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
@@ -339,7 +340,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                test_data.append(rollout(env, agent, param, i_episode, runner, testing=True, visualize= test_iter == 0 )) #param['n_traj']-100) ))
+                mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize ) #param['n_traj']-100) ))
             test_data = np.array(test_data)
     
         if i_episode > 1 and i_episode % 1 == 0:
@@ -363,7 +364,9 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
                     #  'TimestepsAlive': avg_timesteps,
                     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                      'ActionTemp': agent.temp,
-                     'EntropyLoss': loss_info["entropy_loss"]
+                     'EntropyLoss': loss_info["entropy_loss"],
+                     "Test_R_LTL": ltl_test_reward,
+                     "Test_R_MDP": mdp_test_reward
                      })
             
             # avg_timesteps = t #np.mean(timesteps)

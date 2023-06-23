@@ -318,6 +318,7 @@ class ActorCritic(nn.Module):
         has_continuous_action_space = True
         self.has_continuous_action_space = has_continuous_action_space        
         self.temp = action_std_init
+        self.var_denominator = param['ppo']['var_denominator']
         self.switch_temp = param['ppo']['switch_action_temp']
         if has_continuous_action_space:
             self.action_dim = action_dim['mdp'].shape[0]
@@ -400,7 +401,7 @@ class ActorCritic(nn.Module):
             action_head = self.mean_head(body)
             action_log_std_head = self.log_std_head(body)
             action_mean = torch.reshape(action_head, self.main_shp)[buchi_state]
-            action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state] / 5.0
+            action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state] / self.var_denominator
 
 
             # action_switch_head_all = torch.reshape(self.action_switch(body), self.shp)
@@ -451,9 +452,10 @@ class ActorCritic(nn.Module):
             action_probs = self.actor(state)
             dist = Categorical(action_probs)
             action = dist.sample()
+            action_mean = action
             action_logprob = dist.log_prob(action)
 
-        return action.detach(), int(act_or_eps.detach()), is_eps, action_logprob.detach(), torch.log(probs).detach()
+        return action.detach(), action_mean.detach(), int(act_or_eps.detach()), is_eps, action_logprob.detach(), torch.log(probs).detach()
     
     def masked_softmax(self, vec, mask, dim=1, tol=1e-7):
         float_mask = mask.float().to(device)

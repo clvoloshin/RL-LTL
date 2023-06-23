@@ -27,6 +27,7 @@ ppo:
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
   n_traj: 5000
+  var_denominator: 5
   alpha: 0.1
   T: 50
 sac:
@@ -73,3 +74,5 @@ init_seed: 314
 replay_buffer_size: 10000
 checkpoint_freq__n_episodes: 50
 lambda: 125.0
+visualize: True
+reward_type: 2
