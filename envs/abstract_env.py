@@ -81,7 +81,13 @@ class Simulator(gym.Env):
         self.inf_often = []
         self.lambda_val = lambda_val
         self.reward_type = reward_type
-        self.buchi_cycle = buchi_cycle
+        all_accepting_cycles = []
+        for state in self.automaton.automaton.accepting_states:
+            cycles = self.find_min_accepting_cycles(state)
+            all_accepting_cycles.extend(cycles)
+        self.all_accepting_cycles = all_accepting_cycles
+        self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
+        self.buchi_cycle = all_accepting_cycles[2]  # HARD CODE THIS FOR NOW
     
     def unnormalize(self, states):
         try:
@@ -188,7 +194,7 @@ class Simulator(gym.Env):
             #return -1, True
         
         if b in self.buchi_cycle:
-            if b_ == self.buchi_cycle[b][0].child.id:
+            if b_ == self.buchi_cycle[b].child.id:
                 return 1, False
             else:
                 return 0, False
@@ -306,6 +312,28 @@ class Simulator(gym.Env):
         self.mdp.set_state(current_mdp_state)
         self.automaton.set_state(current_aut_state)
         return output
+
+    def find_min_accepting_cycles(self, start_state):
+        visited = set()
+        cycles = []
+        # run a dfs
+        def dfs(vertex, path):
+            visited.add(vertex)
+            self.automaton.set_state(vertex)
+            for edge in self.automaton.edges():
+                neighbor = edge.child.id
+                if neighbor == start_state:
+                    path[vertex] = edge
+                    if path not in cycles:
+                        #import pdb; pdb.set_trace()
+                        cycles.append(deepcopy(path))
+                else:
+                    if neighbor not in visited:
+                        path[vertex] = edge
+                        dfs(neighbor, deepcopy(path))
+            visited.remove(vertex)
+        dfs(start_state, {})
+        return cycles
     
     def render(self, *args, **kw):
         return self.mdp.render(*args, **kw)
