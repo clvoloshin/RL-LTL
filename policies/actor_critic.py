@@ -26,8 +26,7 @@ class Trajectory:
         self.states = []
         self.actions = []
         self.rewards = []
-        self.ltl_rewards = []
-        self.constrained_rewards = []
+        self.cycle_rewards = []
         self.next_states = []
         self.buchis = []
         self.next_buchis = []
@@ -42,7 +41,7 @@ class Trajectory:
         self.has_reward = False
         self.action_placeholder = action_placeholder # should be of MDP action shape
     
-    def add(self, s, b, a, r, lr, cr, s_, b_, is_eps, act_idx, logprob, rhos, edge, terminal):
+    def add(self, s, b, a, r, cycle_rs, s_, b_, is_eps, act_idx, logprob, rhos, edge, terminal):
         self.counter += 1
         # if r > 0: import pdb; pdb.set_trace()
         self.states.append(s)
@@ -51,10 +50,8 @@ class Trajectory:
         self.next_buchis.append(b_)
         self.actions.append(a if not is_eps else self.action_placeholder)
         self.rewards.append(r)  # want this to hold the original MDP reward
-        self.ltl_rewards.append(lr)
-        self.constrained_rewards.append(cr)
-        self.has_reward = self.has_reward or (lr > 0)
-        self.done = self.done or (lr < 0)  # TODO: look into this for other envs?
+        self.cycle_rewards.append(cycle_rs)
+        self.done = self.done or terminal  # TODO: look into this for other envs?
         self.is_eps.append(is_eps)
         self.act_idxs.append(act_idx)
         self.logprobs.append(logprob)
@@ -92,20 +89,20 @@ class RolloutBuffer:
         self.to_hallucinate = to_hallucinate
         self.main_trajectory = None
     
-    def add_experience(self, env, s, b, a, r, lr, cr, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal):
+    def add_experience(self, env, s, b, a, r, cycle_rs, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal):
         if self.to_hallucinate:
-            self.update_trajectories(env, s, b, a, r, lr, cr, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal)
-            self.make_trajectories(env, s, b, a, r, lr, cr, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal)
+            self.update_trajectories(env, s, b, a, r, cycle_rs, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal)
+            self.make_trajectories(env, s, b, a, r, cycle_rs, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal)
         else:
             if len(self.trajectories) == 0: 
                 traj = Trajectory(self.action_placeholder)
                 self.trajectories.append(traj)
             
             traj = self.trajectories[-1]
-            traj.add(s, b, a, r, lr, cr, s_, b_, is_eps, act_idx, logprobs[b][act_idx], rhos, edge, terminal)
+            traj.add(s, b, a, r, cycle_rs, s_, b_, is_eps, act_idx, logprobs[b][act_idx], rhos, edge, terminal)
 
         
-    def make_trajectories(self, env, s, b, a, r, lr, cr, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal):
+    def make_trajectories(self, env, s, b, a, r, cycle_rs, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal):
         if not is_eps:
             assert act_idx == 0
             current_terminal_buchis = set([traj.get_last_buchi() for traj in self.trajectories if not traj.done])
@@ -118,10 +115,9 @@ class RolloutBuffer:
                 # import pdb; pdb.set_trace()
                 traj = Trajectory(self.action_placeholder)
                 next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
-                cr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
-                lr_ = info["ltl_reward"]
-                if accepting_rejecting_neutal < 1: 
-                    traj.add(s, buchi_state, a, r, lr_, cr_, s_, next_buchi_state, is_eps, act_idx, \
+                cycr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
+                if accepting_rejecting_neutal < 1: # why are we only adding it if it doesn't go to an accepting state?
+                    traj.add(s, buchi_state, a, r, cycr_, s_, next_buchi_state, is_eps, act_idx, \
                              logprobs[buchi_state][act_idx], rhos, edge, terminal)
                     self.trajectories.append(traj)
             
@@ -133,17 +129,15 @@ class RolloutBuffer:
                         
                         # make epsilon transition
                         next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s, buchi_state, eps_idx)
-                        cr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
-                        lr_ = info["ltl_reward"]
-                        traj.add(s, buchi_state, a, r, lr_, cr_, s, next_buchi_state, True, 1 + eps_idx, \
+                        cycr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
+                        traj.add(s, buchi_state, a, r, cycr_, s, next_buchi_state, True, 1 + eps_idx, \
                                  logprobs[buchi_state][1 + eps_idx], rhos, edge, terminal)
 
                         # TODO: double check this part
                         # resync trajectory with s_
                         next_next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, next_buchi_state)
-                        cr2, _, info2= env.constrained_reward(rhos, terminal, next_buchi_state, next_next_buchi_state, r)
-                        lr2 = info2["ltl_reward"]
-                        traj.add(s, next_buchi_state, a, r, lr2, cr2, s_, next_next_buchi_state, \
+                        cycr_2, _, info2= env.constrained_reward(rhos, terminal, next_buchi_state, next_next_buchi_state, r)
+                        traj.add(s, next_buchi_state, a, r, cycr_2, s_, next_next_buchi_state, \
                                  is_eps, act_idx, logprobs[next_buchi_state][act_idx], rhos, edge, terminal)
                         self.trajectories.append(traj)
                 except:
@@ -151,7 +145,7 @@ class RolloutBuffer:
         else:
             pass
 
-    def update_trajectories(self, env, s, b, a, r, lr, cr, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal):
+    def update_trajectories(self, env, s, b, a, r, cycle_rs, s_, b_, act_idx, is_eps, logprobs, rhos, edge, terminal):
         new_trajectories = []
         if not is_eps:
             # update all trajectories
@@ -169,26 +163,24 @@ class RolloutBuffer:
                         
                         # make epsilon transition
                         next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s, buchi_state, eps_idx)
-                        cr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
-                        lr_ = info["ltl_reward"]
-                        traj_copy.add(s, buchi_state, a, r, lr_, cr_, s, next_buchi_state, True, \
+                        cycr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
+                        traj_copy.add(s, buchi_state, a, r, cycr_, s, next_buchi_state, True, \
                                       1 + eps_idx, logprobs[buchi_state][1 + eps_idx], rhos, edge, terminal)
                     
                         # resync trajectory with s_
                         next_next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, next_buchi_state)
-                        cr2, _, info2 = env.constrained_reward(rhos, terminal, next_buchi_state, next_next_buchi_state, r)
-                        lr2 = info2["ltl_reward"]
+                        cycr_2, _, info2 = env.constrained_reward(rhos, terminal, next_buchi_state, next_next_buchi_state, r)
                         # TODO: double check this part
-                        traj_copy.add(s, next_buchi_state, a, r, lr2, cr2, s_, next_next_buchi_state, \
+                        traj_copy.add(s, next_buchi_state, a, r, cycr_2, s_, next_next_buchi_state, \
                                       is_eps, act_idx, logprobs[next_buchi_state][act_idx], rhos, edge, terminal)
                         new_trajectories.append(traj_copy)
                 except:
                     pass
 
                 next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
-                cr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
+                cycr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
                 lr_ = info["ltl_reward"]
-                traj.add(s, buchi_state, a, r, lr_, cr_, s_, next_buchi_state, is_eps, act_idx, \
+                traj.add(s, buchi_state, a, r, cycr_, s_, next_buchi_state, is_eps, act_idx, \
                          logprobs[buchi_state][act_idx], rhos, edge, terminal)
         else:
             # only update main, non-hallucinated, trajectory.
@@ -196,9 +188,9 @@ class RolloutBuffer:
             traj = self.trajectories[self.main_trajectory]
             buchi_state = traj.get_last_buchi()
             next_buchi_state, accepting_rejecting_neutal = env.next_buchi(s_, buchi_state)
-            cr_, _, info = env.constrained_reward(rhos, terminal, buchi_state, next_buchi_state, r)
+            cycr_, _, info = env.constrained_reward(rhos, accepting_rejecting_neutal == -1, buchi_state, next_buchi_state, r)
             lr_ = info["ltl_reward"]
-            traj.add(s, buchi_state, a, r, lr_, cr_, s_, next_buchi_state, is_eps, act_idx, \
+            traj.add(s, buchi_state, a, r, cycr_, s_, next_buchi_state, is_eps, act_idx, \
                      logprobs[buchi_state][act_idx], rhos, edge, terminal)
         for traj in new_trajectories:
             self.trajectories.append(traj)
@@ -209,9 +201,9 @@ class RolloutBuffer:
         for traj in self.trajectories:
             # Monte Carlo estimate of returns
             crewards = []
-            discounted_reward = 0
-            for reward in reversed(traj.constrained_rewards):
-                discounted_reward = reward + (gamma * discounted_reward)
+            discounted_reward = np.zeros(traj.cycle_rewards.shape[-1])
+            for cycle_rewards in reversed(traj.cycle_rewards):
+                discounted_reward = cycle_rewards + (gamma * discounted_reward)
                 crewards.insert(0, discounted_reward)
             all_rewards += crewards # extend list
                         
@@ -225,8 +217,7 @@ class RolloutBuffer:
         all_buchis = []
         all_actions = []
         all_rewards = []
-        all_ltl_rewards = []
-        all_constrained_rewards = []
+        all_cycle_rewards = []
         all_action_idxs = []
         all_logprobs = []
         all_next_buchis = []
@@ -242,27 +233,20 @@ class RolloutBuffer:
                 idxs = [] # len(self.all_reward_traj) == 0
             for idx in idxs:
                 traj = X[idx]
-                rewards = []
-                discounted_reward = 0
-                c_rewards = []
-                discounted_creward = 0
-                ltl_rewards = []
-                discounted_lreward = 0
+                mdp_rewards = []
+                discounted_mdp_reward = 0
+                cyc_rewards = []
+                discounted_cyc_reward = np.zeros(len(traj.cycle_rewards[0]))
                 for reward in reversed(traj.rewards):
                     # print(f"reward: {reward}, discounted_reward: {discounted_reward}, gamma: {gamma}")
-                    discounted_reward = reward + (gamma * discounted_reward)
-                    rewards.insert(0, discounted_reward)
-                for lreward in reversed(traj.ltl_rewards):
+                    discounted_mdp_reward = reward + (gamma * discounted_mdp_reward)
+                    mdp_rewards.insert(0, discounted_mdp_reward)
+                for cyc_reward in reversed(traj.cycle_rewards):
                     # print(f"reward: {reward}, discounted_reward: {discounted_reward}, gamma: {gamma}")
-                    discounted_lreward = lreward + (gamma * discounted_lreward)
-                    rewards.insert(0, discounted_lreward)
-                for creward in reversed(traj.constrained_rewards):
-                    # print(f"reward: {reward}, discounted_reward: {discounted_reward}, gamma: {gamma}")
-                    discounted_creward = creward + (gamma * discounted_creward)
-                    c_rewards.insert(0, discounted_creward)
-                all_rewards += rewards # extend list
-                all_ltl_rewards += ltl_rewards
-                all_constrained_rewards += c_rewards
+                    discounted_creward = cyc_reward + (gamma * discounted_cyc_reward)
+                    cyc_rewards.insert(0, discounted_creward)
+                all_rewards += mdp_rewards # extend list
+                all_cycle_rewards += cyc_rewards
                 all_states += traj.states
                 all_actions += traj.actions
                 all_action_idxs += traj.act_idxs
@@ -281,8 +265,7 @@ class RolloutBuffer:
         all_actions = torch.squeeze(torch.tensor(np.array(all_actions))).detach().to(device)
         all_logprobs = torch.squeeze(torch.tensor(all_logprobs)).detach().to(device)
         all_rewards = torch.tensor(np.array(all_rewards), dtype=torch.float32).to(device)
-        all_ltl_rewards = torch.tensor(np.array(all_ltl_rewards), dtype=torch.float32).to(device)
-        all_constrained_rewards = torch.tensor(np.array(all_constrained_rewards), dtype=torch.float32).to(device)
+        all_cycle_rewards = torch.tensor(np.array(all_cycle_rewards), dtype=torch.float32).to(device)
         all_rhos = torch.tensor(np.array(all_rhos), dtype=torch.float32).to(device)
         # all_edges = torch.tensor(np.array(all_edges), dtype=torch.float32).to(device)
         # edge is a new data structure, not torch tensor
@@ -292,7 +275,7 @@ class RolloutBuffer:
         # all_rewards = (all_rewards - all_rewards.mean()) / (all_rewards.std() + 1e-7)
         # print(f"all_rhos.shape: {all_rhos.shape}")
         # print(f"all_terminals.shape: {all_terminals.shape}")
-        return all_states, all_buchis, all_actions, all_next_buchis, all_rewards, all_ltl_rewards, all_constrained_rewards, all_action_idxs, all_logprobs, all_rhos, all_edges, all_terminals #, all_dones
+        return all_states, all_buchis, all_actions, all_next_buchis, all_rewards, all_cycle_rewards, all_action_idxs, all_logprobs, all_rhos, all_edges, all_terminals #, all_dones
 
     def get_states(self):
         all_states = []
@@ -318,7 +301,7 @@ class ActorCritic(nn.Module):
         has_continuous_action_space = True
         self.has_continuous_action_space = has_continuous_action_space        
         self.temp = action_std_init
-        self.switch_temp = param['ppo']['switch_action_temp']
+        self.var_denominator = param['ppo']['var_denominator']
         if has_continuous_action_space:
             self.action_dim = action_dim['mdp'].shape[0]
             self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init, requires_grad=True).to(device)
@@ -400,7 +383,7 @@ class ActorCritic(nn.Module):
             action_head = self.mean_head(body)
             action_log_std_head = self.log_std_head(body)
             action_mean = torch.reshape(action_head, self.main_shp)[buchi_state]
-            action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state] / 5.0
+            action_log_std = torch.reshape(action_log_std_head, self.main_shp)[buchi_state] / self.var_denominator
 
 
             # action_switch_head_all = torch.reshape(self.action_switch(body), self.shp)
@@ -453,7 +436,7 @@ class ActorCritic(nn.Module):
             action = dist.sample()
             action_logprob = dist.log_prob(action)
 
-        return action.detach(), int(act_or_eps.detach()), is_eps, action_logprob.detach(), torch.log(probs).detach()
+        return action.detach(), action_mean.detach(), int(act_or_eps.detach()), is_eps, action_logprob.detach(), torch.log(probs).detach()
     
     def masked_softmax(self, vec, mask, dim=1, tol=1e-7):
         float_mask = mask.float().to(device)

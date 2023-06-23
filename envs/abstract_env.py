@@ -54,7 +54,7 @@ class AbstractEnv(metaclass=ABCMeta):
         return T, C
 
 class Simulator(gym.Env):
-    def __init__(self, mdp, automaton, lambda_val, buchi_cycle=None):
+    def __init__(self, mdp, automaton, lambda_val, buchi_cycle=None, reward_type=2):
         self.mdp = mdp
         self.automaton = automaton
         spaces = {
@@ -81,6 +81,15 @@ class Simulator(gym.Env):
         self.inf_often = []
         self.lambda_val = lambda_val
         self.buchi_cycle = buchi_cycle
+        self.reward_type = reward_type
+        all_accepting_cycles = []
+        for state in self.automaton.automaton.accepting_states:
+            cycles = self.find_min_accepting_cycles(state)
+            all_accepting_cycles.extend(cycles)
+        self.all_accepting_cycles = all_accepting_cycles
+        self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
+        import pdb; pdb.set_trace()
+        #print(self.accepting_cycle_edges)
     
     def unnormalize(self, states):
         try:
@@ -113,24 +122,6 @@ class Simulator(gym.Env):
 
         return {'mdp': state, 'buchi': automaton_state}, {'edge': edge}
 
-        # one_hot = np.zeros(self.automaton.n_states)
-        # one_hot[automaton_state] = 1.
-        # return np.hstack([state, one_hot]), {}
-    
-    # @timeit
-    # def simulate(self, state, action):
-
-    #     env_state, aut_state = state
-    #     self.mdp.set_state(env_state)
-    #     self.automaton.set_state(aut_state)
-    #     output = self.step(action)
-        
-    #     new_output = ((output[0], self.mdp.get_state(), self.automaton.get_state()), output[1], output[2], output[3])
-        
-    #     self.mdp.set_state(env_state)
-    #     self.automaton.set_state(aut_state)
-        
-    #     return new_output
 
     def next_buchi(self, mdp_state, desired_current_aut_state, eps_action=None):
         if eps_action is None:
@@ -172,8 +163,6 @@ class Simulator(gym.Env):
         return 0, False
 
     def ltl_reward_1(self, rhos, terminal, b, b_):
-        # print(f"b_ shape: {b_.shape}")
-        # print(f"accepting states: {self.accepting_states}")
         if isinstance(b_, torch.TensorType): 
             b_device = b_.device
             return b_.cpu().apply_(lambda x: x in self.automaton.automaton.accepting_states).float().to(b_device), terminal
@@ -182,24 +171,27 @@ class Simulator(gym.Env):
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
     def ltl_reward_2(self, rhos, terminal, b, b_):
-        if terminal: #took sink
-            return 0, True
+        cycle_rewards = []
+ 
             #return -1, True
+        for buchi_cycle in self.all_accepting_cycles:
+            if b in buchi_cycle:
+                if b_ == buchi_cycle[b].child.id:
+                    cycle_rewards.append(1.0)
+                else:
+                    cycle_rewards.append(0.0)
+            else: # epsilon transition
+                cycle_rewards.append(0.0)
+        if terminal: #took sink
+                return np.array(cycle_rewards), True
+        return np.array(cycle_rewards), False
         
-        if b in self.buchi_cycle:
-            if b_ == self.buchi_cycle[b][0].child.id:
-                return 1, False
-            else:
-                return 0, False
-        else: # epsilon transition
-            return 0, False
-
     def ltl_reward_3(self, rhos, terminal, b, b_):
         if terminal: #took sink
             return -1, True
         
         if b in self.buchi_cycle:
-            reward_func = self.buchi_cycle[b][0]
+            reward_func = self.buchi_cycle[b]
             r = self.evaluate_buchi_edge(reward_func.stl, rhos)
             return r, False
         else: # epsilon transition
@@ -236,9 +228,13 @@ class Simulator(gym.Env):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
         #if edge in self.buchi_cycle.values():
-        ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
+        if self.reward_type == 1:
+            ltl_reward, done = self.ltl_reward_1(rhos, terminal, b, b_)
+        else:
+            ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
-        return mdp_reward + self.lambda_val * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
+        accepted = 1 if b_ in self.automaton.automaton.accepting_states else 0
+        return mdp_reward + (self.lambda_val * ltl_reward) / self.acc_cycle_edge_counts, done, {"cycle_rewards": ltl_reward, "ltl_reward" : accepted, "mdp_reward": mdp_reward}
     
     # @timeit
     def step(self, action, is_eps=False):
@@ -281,17 +277,6 @@ class Simulator(gym.Env):
         if automaton_state is None:
             import pdb; pdb.set_trace()
 
-        # if automaton_state in self.automaton.automaton.accepting_states: # accepting state
-        #     self.accepting_states.add(state)
-        # elif automaton_state == (self.automaton.automaton.n_states - 1): # rejecting state
-        #     self.rejecting_states.add(state)
-
-        # info.update({'fail': automaton_state in self.rejecting_states, 'goal': automaton_state in self.accepting_states})
-        
-        # if simulate:
-        #     self.mdp.set_state(current_mdp_state)
-        #     self.automaton.set_state(current_aut_state)
-
         return {'mdp': state, 'buchi': automaton_state}, cost, done, new_info
 
     def simulate_step(self, state, buchi, action, is_eps=False):
@@ -302,6 +287,29 @@ class Simulator(gym.Env):
         self.mdp.set_state(current_mdp_state)
         self.automaton.set_state(current_aut_state)
         return output
+    
+    def find_min_accepting_cycles(self, start_state):
+        visited = set()
+        cycles = []
+        stack = [start_state]
+        # run a dfs
+        def dfs(vertex, path):
+            visited.add(vertex)
+            self.automaton.set_state(vertex)
+            for edge in self.automaton.edges():
+                neighbor = edge.child.id
+                if neighbor == start_state:
+                    path[vertex] = edge
+                    if path not in cycles:
+                        #import pdb; pdb.set_trace()
+                        cycles.append(deepcopy(path))
+                else:
+                    if neighbor not in visited:
+                        path[vertex] = edge
+                        dfs(neighbor, deepcopy(path))
+            visited.remove(vertex)
+        dfs(start_state, {})
+        return cycles
     
     def render(self, *args, **kw):
         return self.mdp.render(*args, **kw)

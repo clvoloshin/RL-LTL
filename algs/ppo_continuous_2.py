@@ -78,8 +78,9 @@ class PPO:
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state['mdp']).to(device)
             buchi = state['buchi']
-            action, action_idx, is_eps, action_logprob, all_logprobs = self.policy_old.act(state_tensor, buchi)
-
+            action, action_mean, action_idx, is_eps, action_logprob, all_logprobs = self.policy_old.act(state_tensor, buchi)
+            if is_testing:
+                return action_mean, action_idx, is_eps, action_logprob, all_logprobs
             return action, action_idx, is_eps, action_logprob, all_logprobs
         
     def collect(self, s, b, a, r, s_, b_):
@@ -116,7 +117,7 @@ class PPO:
             
             # TODO: update the RolloutBuffer to return rhos, edge, terminal
             old_states, old_buchis, old_actions, old_next_buchis, rewards, \
-                lrewards, crewards, old_action_idxs, old_logprobs, old_rhos, old_edges, old_terminals \
+                cycle_rewards, old_action_idxs, old_logprobs, old_rhos, old_edges, old_terminals \
                     = self.buffer.get_torch_data(
                         self.gamma, self.batch_size
                     )
@@ -138,7 +139,12 @@ class PPO:
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
-
+            
+            # take the cycle rewards, and find the cycle that maximizes the summed reward
+            best_cycle_idx = torch.argmax(cycle_rewards.sum(dim=0)).item()
+            crewards = cycle_rewards[:, 2]
+            if best_cycle_idx == 2:
+                import pdb; pdb.set_trace()
             # match state_values tensor dimensions with rewards tensor
             state_values = torch.squeeze(state_values)
             
@@ -240,7 +246,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             state['buchi'], 
             action, 
             mdp_reward,
-            rew_info["ltl_reward"],
             constrained_reward, 
             next_state['mdp'], 
             next_state['buchi'], 
@@ -257,7 +262,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         #     env.render()
         # agent.buffer.atomics.append(info['signal'])
         mdp_ep_reward += rew_info["mdp_reward"]
-        ltl_ep_reward += rew_info["ltl_reward"]
+        ltl_ep_reward += max(rew_info["cycle_rewards"])
+        true_ltl_reward = rew_info["ltl_reward"]
         disc_ep_reward += param['gamma']**(t-1) * mdp_reward # TODO: change this to represent combined reward
 
         states.append(next_state['mdp'])
@@ -282,9 +288,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # except:
     #     pass
     #print(action)
-    return mdp_ep_reward, ltl_ep_reward, t
+    return mdp_ep_reward, ltl_ep_reward, true_ltl_reward, t
         
-def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False):
+def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False, visualize=True):
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
@@ -321,7 +327,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
 
         # Get trajectory
         # tic = time.time()
-        mdp_ep_reward, ltl_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False)
+        mdp_ep_reward, ltl_ep_reward, true_ltl_reward, t = rollout(env, agent, param, i_episode, runner, testing=False)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
 
@@ -339,8 +345,9 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                test_data.append(rollout(env, agent, param, i_episode, runner, testing=True, visualize= test_iter == 0 )) #param['n_traj']-100) ))
-            test_data = np.array(test_data)
+                mdp_test_reward, ltl_test_reward, true_ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize )
+                #test_data.append(rollout(env, agent, param, i_episode, runner, testing=True, visualize= test_iter == 0 )) #param['n_traj']-100) ))
+            #test_data = np.array(test_data)
     
         if i_episode > 1 and i_episode % 1 == 0:
             runner.log({#'Iteration': i_episode,
@@ -363,27 +370,12 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
                     #  'TimestepsAlive': avg_timesteps,
                     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                      'ActionTemp': agent.temp,
-                     'EntropyLoss': loss_info["entropy_loss"]
+                     'EntropyLoss': loss_info["entropy_loss"],
+                     "Test_R_LTL": true_ltl_test_reward,
+                     "Test_R_MDP": mdp_test_reward
                      })
             
-            # avg_timesteps = t #np.mean(timesteps)
-            #history += [disc_ep_reward]
-            # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
-            # success_history += [test_data[:, 0].mean()]
-            # disc_success_history += [test_data[:, 1].mean()]
             method = "PPO"
-            #plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
-            # logger.logkv('Iteration', i_episode)
-            # logger.logkv('Method', method)
-            # logger.logkv('Success', success_history[-1])
-            # logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
-            # logger.logkv('DiscSuccess', disc_success_history[-1])
-            # logger.logkv('Last20DiscSuccess', np.mean(np.array(disc_success_history[-20:])))
-            # logger.logkv('EpisodeReward', ep_reward)
-            # logger.logkv('DiscEpisodeReward', disc_ep_reward)
-            # logger.logkv('TimestepsAlive', avg_timesteps)
-            # logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['ppo']['T'])
-            # logger.logkv('ActionTemp', agent.temp)
-            # logger.dumpkvs()
+
             
     plt.close()

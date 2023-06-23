@@ -64,8 +64,7 @@ def parse_helpers_ltlf(phi):
         return STLNode('False') 
 
     members = phi._members()
-
-    if len(members) == 1:
+    if isinstance(members, str) or len(members) == 1:
         id = "rho"  # at a leaf
         robustness_fxn = str(members)
         return STLNode(id, [], rho=robustness_fxn)

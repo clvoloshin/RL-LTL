@@ -180,6 +180,7 @@ class QNetwork(nn.Module):
         #     out = torch.masked.MaskedTensor(qs, self.mask[buchi].squeeze())
         # else:
         #     out = qs
+        #import pdb; pdb.set_trace()
         return qs
     
     def forward(self, state, buchi, action, to_mask=True):
@@ -281,14 +282,6 @@ class GaussianPolicy(nn.Module):
             ### Bias against epsilon actions by multiplication by +10
             # action_switch[..., 0] *= torch.sign(action_switch[..., 0]) * 100
             probs = self.masked_softmax(action_switch, mask, -1)[buchi_state]
-
-        # action_switch_head_all = torch.reshape(self.action_switch(body), self.shp)
-        # masked_head_all = torch.masked.MaskedTensor(action_switch_head_all, self.mask)
-        # probs_all = F.softmax(masked_head_all)
-        # probs = probs_all.to_tensor(0)
-        
-        # action_switch = action_switch_head_all#[buchi_state]
-        # mask = self.mask#[buchi_state]
 
         # ### Bias against epsilon actions by multiplication by +10
         # # action_switch[..., 0] *= torch.sign(action_switch[..., 0]) * 100

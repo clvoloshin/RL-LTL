@@ -11,7 +11,9 @@ class CarloEnv:
     def __init__(self, continuous_actions=True):
         dt = 0.1 # time steps in terms of seconds. In other words, 1/dt is the FPS.
         world_width = 120/2 # in meters
+        self.world_width = world_width
         world_height = 120/2
+        self.world_height = world_height
         self.inner_building_radius = 30/2
         num_lanes = 2
         self.lane_marker_width = 0.5
@@ -62,7 +64,7 @@ class CarloEnv:
         self.dt = dt
         self.world = w
         self.reset()
-        self.world.render() # This visualizes the world we just constructed.
+        #self.world.render() # This visualizes the world we just constructed.
 
         # gym environment specific variables
         if continuous_actions:
@@ -159,10 +161,18 @@ class CarloEnv:
                 self.world.remove_agents()
                 self.world.visualizer.save_fig(save_dir + '.png')
         
-        if save_states:
-            np.save(save_dir + '.npy', np.array(states))
+        # if save_states:
+        #     np.save(save_dir + '.npy', np.array(states))
             
-                
+    def distance_to_edge(self):
+        normalization = self.world_height
+        # reward staying as far from the middle of the track as possible
+        return np.linalg.norm([self.state[0] - (self.world_width/2.0), self.state[1] - (self.world_height/2.0)]) / normalization
+    
+    def get_info(self):
+        #return {"rho": self.distance_to_waypoints()}
+        return {"rho": [0]}
+    
     def step(self, action):
 
         if not self.continuous_actions:
@@ -186,11 +196,12 @@ class CarloEnv:
         self.world.tick() # This ticks the world for one time step (dt second)
 
         cost = np.linalg.norm(u)
+        reward = self.distance_to_edge()
         terminated = self.world.collision_exists()
         self.state = self.get_state()
         # if (np.linalg.norm(self.state[2:4]*self.agent.max_speed)+1e-7) < self.agent.min_speed:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, cost, terminated, {}
+        return self.state, reward, terminated, self.get_info()
         
