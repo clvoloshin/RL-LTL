@@ -27,7 +27,7 @@ class Trajectory:
         self.actions = []
         self.rewards = []
         self.ltl_rewards = []
-        self.constrained_rewards = []
+        self.cycle_rewards = []
         self.next_states = []
         self.buchis = []
         self.next_buchis = []
@@ -52,9 +52,9 @@ class Trajectory:
         self.actions.append(a if not is_eps else self.action_placeholder)
         self.rewards.append(r)  # want this to hold the original MDP reward
         self.ltl_rewards.append(lr)
-        self.constrained_rewards.append(cr)
+        self.cycle_rewards.append(cr)
         self.has_reward = self.has_reward or (lr > 0)
-        self.done = self.done or (lr < 0)  # TODO: look into this for other envs?
+        self.done = self.done #or (lr < 0)  # TODO: look into this for other envs?
         self.is_eps.append(is_eps)
         self.act_idxs.append(act_idx)
         self.logprobs.append(logprob)
@@ -256,7 +256,7 @@ class RolloutBuffer:
                     # print(f"reward: {reward}, discounted_reward: {discounted_reward}, gamma: {gamma}")
                     discounted_lreward = lreward + (gamma * discounted_lreward)
                     rewards.insert(0, discounted_lreward)
-                for creward in reversed(traj.constrained_rewards):
+                for creward in reversed(traj.cycle_rewards):
                     # print(f"reward: {reward}, discounted_reward: {discounted_reward}, gamma: {gamma}")
                     discounted_creward = creward + (gamma * discounted_creward)
                     c_rewards.insert(0, discounted_creward)

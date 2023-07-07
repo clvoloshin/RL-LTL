@@ -87,7 +87,7 @@ class Simulator(gym.Env):
             all_accepting_cycles.extend(cycles)
         self.all_accepting_cycles = all_accepting_cycles
         self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
-        self.buchi_cycle = all_accepting_cycles[2]  # HARD CODE THIS FOR NOW
+        self.buchi_cycle = all_accepting_cycles[0]  # HARD CODE THIS FOR NOW
     
     def unnormalize(self, states):
         try:
@@ -189,18 +189,21 @@ class Simulator(gym.Env):
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
     def ltl_reward_2(self, rhos, terminal, b, b_):
-        if terminal: #took sink
-            return 0, True
-            #return -1, True
-        
-        if b in self.buchi_cycle:
-            if b_ == self.buchi_cycle[b].child.id:
-                return 1, False
-            else:
-                return 0, False
-        else: # epsilon transition
-            return 0, False
+        cycle_rewards = []
 
+            #return -1, True
+        for buchi_cycle in self.all_accepting_cycles:
+            if b in buchi_cycle:
+                if b_ == buchi_cycle[b].child.id:
+                    cycle_rewards.append(1.0)
+                else:
+                    cycle_rewards.append(0.0)
+            else: # epsilon transition
+                cycle_rewards.append(0.0)
+        if terminal: #took sink
+                return np.array(cycle_rewards), True
+        return np.array(cycle_rewards), False
+    
     def ltl_reward_3(self, rhos, terminal, b, b_):
         if terminal: #took sink
             return -1, True
@@ -242,13 +245,12 @@ class Simulator(gym.Env):
                             ):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
-        #if edge in self.buchi_cycle.values():
         if self.reward_type == 1:
             ltl_reward, done = self.ltl_reward_1(rhos, terminal, b, b_) #TODO: manually set this for now
         else:
             ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
-        return mdp_reward + self.lambda_val * ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
+        return mdp_reward + (self.lambda_val * ltl_reward) / self.acc_cycle_edge_counts, done, {"ltl_reward": max(ltl_reward), "mdp_reward": mdp_reward}
     
     # @timeit
     def step(self, action, is_eps=False):

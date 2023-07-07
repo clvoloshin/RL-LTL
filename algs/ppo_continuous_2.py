@@ -139,6 +139,13 @@ class PPO:
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
+            
+            
+            # take the cycle rewards, and find the cycle that maximizes the summed reward
+            best_cycle_idx = torch.argmax(crewards.sum(dim=0)).item()
+            crewards = crewards[:, best_cycle_idx]
+            # if best_cycle_idx == 2:
+            #     import pdb; pdb.set_trace()
 
             # match state_values tensor dimensions with rewards tensor
             state_values = torch.squeeze(state_values)
