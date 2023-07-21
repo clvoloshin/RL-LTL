@@ -6,6 +6,8 @@ import time
 # from tkinter import *
 import gym
 import gym.spaces as spaces
+from moviepy.video.io.bindings import mplfig_to_npimage
+
 
 class CarloEnv:
     def __init__(self, continuous_actions=True):
@@ -59,6 +61,7 @@ class CarloEnv:
         # A Car object is a dynamic object -- it can move. We construct it using its center location and heading angle.
         self.world_width = world_width
         self.world_height = world_height
+        self.center = np.array([30, 30])
         self.dt = dt
         self.world = w
         self.reset()
@@ -137,7 +140,7 @@ class CarloEnv:
         new_state = state * np.array([self.world_width, self.world_height, self.agent.max_speed, self.agent.max_speed, 2*np.pi]) 
         return np.array([np.linalg.norm([new_state[0] - wp.x, new_state[1] - wp.y]) for wp in self.waypoints])
 
-    def render(self, states = [], save_dir=None, save_states=True):
+    def render(self, states = [], save_dir=None, save_states=False):
         
         if not self.world.headless:
             self.world.render()
@@ -159,10 +162,12 @@ class CarloEnv:
                 self.world.remove_agents()
                 self.world.visualizer.save_fig(save_dir + '.png')
         
-        if save_states:
-            np.save(save_dir + '.npy', np.array(states))
-            
-                
+                if save_states:
+                    np.save(save_dir + '.npy', np.array(states))
+         
+        # numpy_fig = mplfig_to_npimage(self.fig)  # convert it to a numpy array
+        # return numpy_fig
+    
     def step(self, action):
 
         if not self.continuous_actions:
@@ -185,12 +190,14 @@ class CarloEnv:
         # self.agent.set_control(1, .2)
         self.world.tick() # This ticks the world for one time step (dt second)
 
-        cost = np.linalg.norm(u)
+        reward = -1 * np.linalg.norm(u)
+        position = np.array([self.agent.x, self.agent.y])
+        stay_centered_reward = (21.25 - np.linalg.norm(position - self.center)) / self.inner_building_radius  # negative penalty for distance from the center of the track
         terminated = self.world.collision_exists()
         self.state = self.get_state()
         # if (np.linalg.norm(self.state[2:4]*self.agent.max_speed)+1e-7) < self.agent.min_speed:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, cost, terminated, {}
+        return self.state, reward, terminated, {"rho": np.array(0)}
         

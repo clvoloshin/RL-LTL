@@ -296,7 +296,6 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
-    
     ## G(F(y & X(F(r)))) & G~b
     constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0]], 1: [env.automaton.edges(1, 2)[0]], 2: [env.automaton.edges(2, 0)[0]]}
     #import pdb; pdb.set_trace()
@@ -323,6 +322,8 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     # success_history = []
     # disc_success_history = []
     fixed_state, _ = env.reset()
+    #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
+
 
     for i_episode in tqdm(range(param['ppo']['n_traj'])):
         # TRAINING
