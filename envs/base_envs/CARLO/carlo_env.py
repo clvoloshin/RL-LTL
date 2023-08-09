@@ -78,10 +78,10 @@ class CarloEnv:
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=self.get_state().shape, dtype='float32')
 
     def reset(self):
-        # try:
-        #     self.world.visualizer.close()
-        # except:
-        #     pass
+        try:
+            self.world.visualizer.close()
+        except:
+            pass
 
         self.world.reset()
         
@@ -149,18 +149,23 @@ class CarloEnv:
             dh = self.world.visualizer.display_height
             if len(states):
                 for (x1,y1), (x2, y2) in zip(np.array(states)[:-1, 0:2], np.array(states)[1:, 0:2]):
-                    # self.world.add(Line(Point(x1,y1), Point(x2, y2)))
+                    #self.world.add(Line(Point(x1,y1), Point(x2, y2)))
+                    x1 *= self.world_width
+                    x2 *= self.world_width
+                    y1 *= self.world_height
+                    y2 *= self.world_height
                     self.world.visualizer.win.plot_line_(ppm*x1, dh - ppm*y1, ppm*x2, dh - ppm*y2, fill='red', width='2')
                 # coords = np.array(states)[0:2]
                 # coords[:, 0] *= ppm
                 # coords[:, 1] = dh - ppm*coords[:, 1]
                 # self.world.visualizer.win.plot_line(coords.T.flatten().tolist(), color='green')
-
+            #import pdb; pdb.set_trace()
             self.world.render()
 
             if save_dir is not None:
-                self.world.remove_agents()
                 self.world.visualizer.save_fig(save_dir)
+                self.world.remove_agents()
+                #self.world.visualizer.save_fig(save_dir)
     
             if save_states:
                 np.save(save_dir + '.npy', np.array(states))
@@ -189,7 +194,9 @@ class CarloEnv:
         self.agent.set_control(u[0], u[1])
         # self.agent.set_control(1, .2)
         self.world.tick() # This ticks the world for one time step (dt second)
-
+        # if self.world.collision_exists():
+        #     reward = -500
+        # else:
         reward = -1 * np.linalg.norm(u)
         position = np.array([self.agent.x, self.agent.y])
         stay_centered_reward = (21.25 - np.linalg.norm(position - self.center)) / self.inner_building_radius  # negative penalty for distance from the center of the track
@@ -199,5 +206,5 @@ class CarloEnv:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, reward, terminated, {"rho": np.array(0)}
+        return self.state, 0, terminated, {"rho": np.array(0)}
         
