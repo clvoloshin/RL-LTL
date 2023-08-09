@@ -3,6 +3,7 @@ from pathlib import Path
 import wandb
 import torch
 import numpy as np
+import os
 from omegaconf import OmegaConf
 from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
@@ -22,8 +23,13 @@ def main(cfg):
     np.random.seed(seeds[0])
     env = hydra.utils.instantiate(cfg.env)
     automaton = AutomatonRunner(Automaton(**cfg['ltl']))
-    #TODO: automatically find cycles, if possible
-    #G(F(y & X(F(r)))) & G~b
+    # make logging dir for wandb to pull from, if necessary
+    if cfg["visualize"]:
+        save_dir = os.path.join(os.getcwd(), 'experiments', cfg['logger']['dir_name'])
+        if not os.path.exists(save_dir):
+            os.mkdir(save_dir)
+    else:
+        save_dir = None
     constrained_rew_fxn = {0: [automaton.edges(0, 1)[0]], 1: [automaton.edges(1, 2)[0]], 2: [automaton.edges(2, 0)[0]]}
 
     sim = Simulator(env, automaton, cfg['lambda'], buchi_cycle=constrained_rew_fxn, reward_type=cfg['reward_type'])
@@ -32,7 +38,7 @@ def main(cfg):
         # copt = ConstrainedOptimization(cfg, run, sim)
 
         #run_sac(cfg, run, sim)
-        run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"])
+        run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"], save_dir=save_dir)
         # run_value_iter(cfg, run, sim)
     print(cfg)
 

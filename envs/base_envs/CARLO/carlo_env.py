@@ -78,10 +78,10 @@ class CarloEnv:
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=self.get_state().shape, dtype='float32')
 
     def reset(self):
-        try:
-            self.world.visualizer.close()
-        except:
-            pass
+        # try:
+        #     self.world.visualizer.close()
+        # except:
+        #     pass
 
         self.world.reset()
         
@@ -160,10 +160,10 @@ class CarloEnv:
 
             if save_dir is not None:
                 self.world.remove_agents()
-                self.world.visualizer.save_fig(save_dir + '.png')
-        
-                if save_states:
-                    np.save(save_dir + '.npy', np.array(states))
+                self.world.visualizer.save_fig(save_dir)
+    
+            if save_states:
+                np.save(save_dir + '.npy', np.array(states))
          
         # numpy_fig = mplfig_to_npimage(self.fig)  # convert it to a numpy array
         # return numpy_fig

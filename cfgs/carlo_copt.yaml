@@ -50,6 +50,6 @@ n_seeds: 10
 init_seed: 314
 replay_buffer_size: 5000
 checkpoint_freq__n_episodes: 50
-lambda: 200.0
+lambda: 750.0
 visualize: False
 reward_type: 2

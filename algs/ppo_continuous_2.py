@@ -191,7 +191,7 @@ class PPO:
         return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": normalized_val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 
-def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False):
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None):
     states, buchis = [], []
     state, _ = env.reset()
     states.append(state['mdp'])
@@ -275,12 +275,15 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         state = next_state
 
     if visualize:
+        if save_dir is not None:
+            # load image from save dir
         # frames = 
         # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
-        if testing: 
-            runner.log({"testing": wandb.Image(env.render(states=states, save_dir=None))})
-        else:
-            runner.log({"training": wandb.Image(env.render(states=states, save_dir=None))})
+            env.render(states=states, save_dir=save_dir + "/trajectory.png")
+            if testing: 
+                runner.log({"testing": wandb.Image(save_dir + "/trajectory.png")})
+            # else:
+            #     runner.log({"training": wandb.Image(env.render(states=states, save_dir=None))})
     # print('Get Experience', total_experience_time)
     # print('Get Action', total_action_time)
     #print(next_state['mdp'])
@@ -292,7 +295,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     #print(action)
     return mdp_ep_reward, ltl_ep_reward, t
         
-def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False, visualize=True):
+def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False, visualize=True, save_dir=None):
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
@@ -330,7 +333,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
 
         # Get trajectory
         # tic = time.time()
-        mdp_ep_reward, ltl_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False)
+        mdp_ep_reward, ltl_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
 
@@ -348,7 +351,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize ) #param['n_traj']-100) ))
+                mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
             test_data = np.array(test_data)
     
         if i_episode > 1 and i_episode % 1 == 0:
