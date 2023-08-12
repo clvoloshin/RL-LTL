@@ -197,7 +197,7 @@ class CarloEnv:
         # if self.world.collision_exists():
         #     reward = -500
         # else:
-        reward = -1 * np.linalg.norm(u)
+        reward = (-1 * np.linalg.norm(u)) #* 0.25
         position = np.array([self.agent.x, self.agent.y])
         stay_centered_reward = (21.25 - np.linalg.norm(position - self.center)) / self.inner_building_radius  # negative penalty for distance from the center of the track
         terminated = self.world.collision_exists()
@@ -206,5 +206,5 @@ class CarloEnv:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, 0, terminated, {"rho": np.array(0)}
+        return self.state, reward, terminated, {"rho": np.array(0)}
         
