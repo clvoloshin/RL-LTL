@@ -94,7 +94,6 @@ class FlatWorld(gym.Env):
         self.state = np.array([-1, -1])
         self.render_mode = render_mode
         self.fig, self.ax = plt.subplots(1, 1)
-        self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
     
     def generate_random_rewards(self):
         reward_regions = np.random.uniform(-2, 2, size=(30, 2))  # TODO: set this to be something different, if needed
@@ -145,7 +144,6 @@ class FlatWorld(gym.Env):
         
         self.state = self.init_state
         # reset the collected STL rho values
-        self.episode_rhos = {rho_symbol: [] for rho_symbol in self.rho_alphabet}
 
         self.timestep = 0
 
@@ -201,14 +199,9 @@ class FlatWorld(gym.Env):
         self.state = np.clip(self.state, self.observation_space.low, self.observation_space.high)
         cost = np.linalg.norm(action)
         reward = self.custom_reward()
-        terminated = False
-        info = self.get_info()
-                  
+        terminated = False                  
 
-        return self.state, reward, terminated, info
-
-    def get_info(self):
-        return {"rho": self.compute_rho()}
+        return self.state, reward, terminated, {}
 
     @plotlive
     def render(self, states = [], save_dir=None):
@@ -259,8 +252,8 @@ class FlatWorld(gym.Env):
         self.ax.set_xlim([-2, 2])
         self.ax.set_ylim([-2, 2])
 
-        if save_dir is not None:
-            self.fig.savefig(save_dir)
+        # if save_dir is not None:
+        #     self.fig.savefig(save_dir)
 
         numpy_fig = mplfig_to_npimage(self.fig)  # convert it to a numpy array
         return numpy_fig

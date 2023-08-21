@@ -117,7 +117,7 @@ class PPO:
             
             # TODO: update the RolloutBuffer to return rhos, edge, terminal
             old_states, old_buchis, old_actions, old_next_buchis, rewards, \
-                lrewards, crewards, old_action_idxs, old_logprobs, old_rhos, old_edges, old_terminals \
+                lrewards, crewards, old_action_idxs, old_logprobs, old_edges, old_terminals \
                     = self.buffer.get_torch_data(
                         self.gamma, self.batch_size
                     )
@@ -167,9 +167,12 @@ class PPO:
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
-            normalized_val_loss = val_loss / (self.ltl_lambda / (1 - self.gamma))
+            if self.ltl_lambda != 0:
+                normalized_val_loss = val_loss / (self.ltl_lambda / (1 - self.gamma))
+            else:
+                normalized_val_loss = val_loss
 
-            loss = policy_grad + 0.5*normalized_val_loss - self.alpha*entropy_loss #TODO: tune the amount we want to regularize entropy
+            loss = policy_grad + 0.5*normalized_val_loss #- self.alpha*entropy_loss #TODO: tune the amount we want to regularize entropy
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
@@ -220,16 +223,15 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         else:
             action = action.cpu().numpy().flatten()
         
-        # TODO: update the env_step function to return rhos, edge, terminal as info
+        # TODO: update the env_step function to return edge, terminal as info
         try:
             next_state, mdp_reward, done, info = env.step(action, is_eps)
         except:
             next_state, mdp_reward, done, _, info = env.step(action, is_eps)
         #reward = int(info['is_accepting'])
-        rhos = info['rho']
         edge = info['edge']
         terminal = info['is_rejecting']
-        constrained_reward, _, rew_info = env.constrained_reward(rhos, terminal, state['buchi'], next_state['buchi'], mdp_reward)
+        constrained_reward, _, rew_info = env.constrained_reward(terminal, state['buchi'], next_state['buchi'], mdp_reward)
         if testing & visualize:
             s = torch.tensor(next_state['mdp']).type(torch.float)
             b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -255,7 +257,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             action_idx, 
             is_eps, 
             all_logprobs,
-            rhos,
             edge,
             terminal,
             )
@@ -275,11 +276,15 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         state = next_state
 
     if visualize:
-        if save_dir is not None:
+        save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
+        img = env.render(states=states, save_dir=save_dir)
+        if img is not None:
+            if testing: 
+                runner.log({"testing": wandb.Image(img)})
+        elif save_dir is not None:  # if we're in an environment that can't generate an image as in-python array
             # load image from save dir
         # frames = 
         # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
-            env.render(states=states, save_dir=save_dir + "/trajectory.png")
             if testing: 
                 runner.log({"testing": wandb.Image(save_dir + "/trajectory.png")})
             # else:
