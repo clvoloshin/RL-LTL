@@ -87,7 +87,7 @@ class Simulator(gym.Env):
             all_accepting_cycles.extend(cycles)
         self.all_accepting_cycles = all_accepting_cycles
         self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
             
     def unnormalize(self, states):
         try:
@@ -248,9 +248,9 @@ class Simulator(gym.Env):
             #epsilon transition
             state = self.mdp.get_state()
             label, _ = self.mdp.label(state)
-            try:
+            if self.mdp.continuous_actions == False:
                 automaton_state, edge = self.automaton.epsilon_step(action - self.mdp.action_space.n) # discrete
-            except:
+            else:
                 automaton_state, edge = self.automaton.epsilon_step(action - 1) # continuous
 
             automaton_state, edge = self.automaton.step(label) # Do we take this step right now???

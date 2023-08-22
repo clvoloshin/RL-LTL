@@ -350,11 +350,11 @@ class ActorCritic(nn.Module):
             self.mask = torch.ones((state_dim['buchi'].n, action_dim['total'])).type(torch.bool)
             if action_dim['total'] > 1:
                 for buchi in range(state_dim['buchi'].n):
-                    try:
-                        eps = action_dim['total'] - 1 + action_dim[buchi].n
-                    except:
-                        eps = action_dim['total'] - 1
-                    self.mask[buchi, eps:] = False                        
+                    if buchi in action_dim:
+                        eps = 1 + action_dim[buchi].n
+                    else:
+                        eps = 1
+                    self.mask[buchi, eps:] = False
         else:
             raise NotImplemented
             # self.actor = nn.Sequential(
@@ -488,7 +488,7 @@ class ActorCritic(nn.Module):
             # Fix
             probs_all = self.masked_softmax(action_switch, mask, -1)
             probs = probs_all.squeeze()
-            dist_coinflip = Categorical(probs_all)
+            dist_coinflip = Categorical(probs)
             
 
             action_var = self.action_var.expand_as(action_mean)
@@ -499,7 +499,8 @@ class ActorCritic(nn.Module):
             
             action_logprobs = dist.log_prob(action)
             try:
-                logprobs_from_coinflip = torch.log(torch.take_along_dim(probs, action_idxs.unsqueeze(1), dim=1).squeeze() + 1e-8)
+                s_probs = torch.take_along_dim(probs, action_idxs.unsqueeze(1), dim=1).squeeze() + 1e-8
+                logprobs_from_coinflip = torch.log(s_probs)
             except:
                 logprobs_from_coinflip = torch.log(probs)
 
@@ -513,7 +514,7 @@ class ActorCritic(nn.Module):
             # Entropy. Overapprox, not exact. RECHECK
             dist_coinflip = dist_coinflip.entropy().squeeze()
             dist_gaussian = dist.entropy()#.mean()
-            dist_entropy = dist_coinflip + dist_gaussian * probs#(action_idxs == 0)
+            dist_entropy = dist_coinflip + dist_gaussian * probs[:, 0]
             #dist_entropy = dist_gaussian  #TODO: fix this!
             #import pdb; pdb.set_trace()
 

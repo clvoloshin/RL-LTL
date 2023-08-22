@@ -111,6 +111,9 @@ class CarloEnv:
 
     def get_state(self):
         return np.array([self.agent.x, self.agent.y, self.agent.xp, self.agent.yp, self.agent.heading]) / np.array([self.world_width, self.world_height, self.agent.max_speed, self.agent.max_speed, 2*np.pi]) 
+    
+    def get_info(self):
+        return {}
 
     def label(self, state):
         signal, labels = {}, {}

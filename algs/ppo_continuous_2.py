@@ -80,7 +80,8 @@ class PPO:
             buchi = state['buchi']
             action, action_mean, action_idx, is_eps, action_logprob, all_logprobs = self.policy_old.act(state_tensor, buchi)
             if is_testing:
-                return action_mean, action_idx, is_eps, action_logprob, all_logprobs
+                if not is_eps:
+                    return action_mean, action_idx, is_eps, action_logprob, all_logprobs
             return action, action_idx, is_eps, action_logprob, all_logprobs
         
     def collect(self, s, b, a, r, s_, b_):
@@ -172,7 +173,7 @@ class PPO:
             else:
                 normalized_val_loss = val_loss
 
-            loss = policy_grad + 0.5*normalized_val_loss #- self.alpha*entropy_loss #TODO: tune the amount we want to regularize entropy
+            loss = policy_grad + 0.5*normalized_val_loss - self.alpha*entropy_loss #TODO: tune the amount we want to regularize entropy
             logger.logkv('policy_grad', policy_grad.detach().mean())
             logger.logkv('val_loss', val_loss.detach().mean())
             logger.logkv('entropy_loss', entropy_loss.detach().mean())
@@ -224,10 +225,10 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             action = action.cpu().numpy().flatten()
         
         # TODO: update the env_step function to return edge, terminal as info
-        try:
-            next_state, mdp_reward, done, info = env.step(action, is_eps)
-        except:
-            next_state, mdp_reward, done, _, info = env.step(action, is_eps)
+        # try:
+        next_state, mdp_reward, done, info = env.step(action, is_eps)
+        # except:
+        #     next_state, mdp_reward, done, _, info = env.step(action, is_eps)
         #reward = int(info['is_accepting'])
         edge = info['edge']
         terminal = info['is_rejecting']
@@ -305,7 +306,6 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
     ## G(F(y & X(F(r)))) & G~b
-    constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0]], 1: [env.automaton.edges(1, 2)[0]], 2: [env.automaton.edges(2, 0)[0]]}
     #import pdb; pdb.set_trace()
     ## F(G(y))
     #constrained_rew_fxn = {1: [env.automaton.edges(1, 1)[0]]}

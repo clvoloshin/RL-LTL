@@ -151,6 +151,9 @@ class FlatWorld(gym.Env):
     
     def get_state(self):
         return self.state
+
+    def get_info(self):
+        return {}
     
     def set_state(self, state):
         self.state = state

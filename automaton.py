@@ -478,6 +478,7 @@ class AutomatonRunner(object):
             self.current_state = self.automaton.eps[self.current_state][action]
             return self.current_state, -1
         except:
+            import pdb; pdb.set_trace()
             assert 'This epsilon step doesnt exist, (q,e) = (%s, %s)' % (self.current_state, action)
         
 
