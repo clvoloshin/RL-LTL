@@ -1,0 +1,48 @@
+env:
+  file: <class 'envs.safetygym_point_button.safety_gym_env'>
+classes:
+  continuous: <class 'envs.safetygym_point_button.safety_gym_env'>
+logger:
+  dir_name: safety_gym
+ltl:
+  autobuild: False
+  formula: "GF(wp_0 & XF(wp_1)) & G!crash" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
+  oa_type: ldba
+  rabinizer: ./rabinizer4/bin/ltl2ldba
+ppo:
+  action_std: .5                  # starting std for action distribution (Multivariate Normal)
+  temp_decay_type: 'exponential'
+  temp_decay_rate: 0.999       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
+  min_action_temp: 0.3             # minimum action_std (stop decay after action_std <= min_action_std)
+  temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
+  K_epochs: 5              # update policy for K epochs in one PPO update
+  batch_size: 16               # update policy for K epochs in one PPO update
+  eps_clip: 0.4          # clip parameter for PPO
+  lr_actor: 0.0001       # learning rate for actor network
+  lr_critic: 0.01       # learning rate for critic network
+  update_timestep: 1 # T * 4
+  update_freq__n_episodes: 1
+  n_traj: 5000
+  T: 500
+q_learning:
+  batches_per_update: 5
+  batch_size: 128
+  update_freq__n_episodes: 1
+  init_temp: .8
+  temp_decay_freq__n_episodes: 100
+  temp_decay_rate: .9
+  temp_decay_type: 'exponential'
+  min_action_temp: .15
+  lr: .001
+  iterations_per_target_update: 15
+  n_traj: 2000
+  T: 50
+testing:
+  testing_freq__n_episodes: 25
+  num_rollouts: 1
+gamma: .995
+n_grad_updates: 1
+delta: .1
+n_seeds: 10
+init_seed: 314
+replay_buffer_size: 5000
