@@ -14,13 +14,13 @@ class CarloEnv:
         dt = 0.1 # time steps in terms of seconds. In other words, 1/dt is the FPS.
         world_width = 120/2 # in meters
         world_height = 120/2
-        self.inner_building_radius = 30/2
+        self.inner_building_radius = 20/2
         num_lanes = 2
-        self.lane_marker_width = 0.5
+        self.lane_marker_width = 0.75
         num_of_lane_markers = 52/2
-        self.lane_width = 6# 3.5
+        self.lane_width = 8.5# 3.5
         self.continuous_actions = continuous_actions
-        self.ppm = 20
+        self.ppm = 15
 
         w = World(dt, width = world_width, height = world_height, ppm = self.ppm) # The world is 120 meters by 120 meters. ppm is the pixels per meter.
 
@@ -41,14 +41,15 @@ class CarloEnv:
         self.waypoints = []
         for lane_no in range(num_lanes - 1):
             lane_markers_radius = self.inner_building_radius + (lane_no + 1) * self.lane_width + (lane_no + 0.5) * self.lane_marker_width
-            lane_marker_height = np.sqrt(2*(lane_markers_radius**2)*(1-np.cos((2*np.pi)/(2*num_of_lane_markers)))) # approximate the circle with a polygon and then use cosine theorem
+            lane_marker_height = 0.5 #np.sqrt(2*(lane_markers_radius**2)*(1-np.cos((2*np.pi)/(2*num_of_lane_markers)))) # approximate the circle with a polygon and then use cosine theorem
+            lane_marker_width = self.lane_width * num_lanes
             for i, theta in enumerate(np.arange(0, 2*np.pi, 2*np.pi / num_of_lane_markers)):
                 dx = lane_markers_radius * np.cos(theta)
                 dy = lane_markers_radius * np.sin(theta)
                 if (i % 13 == 0) & (i > -1):
                     self.waypoints.append(
-                        CircleBuilding(Point(world_width/2 + dx + (0 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (0 * self.lane_width) * np.sin(theta)), 5, 'blue')
-                        # Painting(Point(world_width/2 + dx + (-.5 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (-.5 * self.lane_width) * np.sin(theta)), Point(self.lane_marker_width, lane_marker_height), 'red', heading = theta)
+                        #CircleBuilding(Point(world_width/2 + dx + (0 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (0 * self.lane_width) * np.sin(theta)), 5, 'blue')
+                        Painting(Point(world_width/2 + dx + (0 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (0 * self.lane_width) * np.sin(theta)), Point(lane_marker_width, lane_marker_height), 'blue', heading=theta)
                         )
                     wp = self.waypoints[-1]
                     wp.collidable = False
@@ -110,6 +111,9 @@ class CarloEnv:
 
     def get_state(self):
         return np.array([self.agent.x, self.agent.y, self.agent.xp, self.agent.yp, self.agent.heading]) / np.array([self.world_width, self.world_height, self.agent.max_speed, self.agent.max_speed, 2*np.pi]) 
+    
+    def get_info(self):
+        return {}
 
     def label(self, state):
         signal, labels = {}, {}
@@ -198,19 +202,19 @@ class CarloEnv:
         #     reward = -500
         # else:
         reward = (-1 * np.linalg.norm(u)) #* 0.25
-        position = np.array([self.agent.x, self.agent.y])
-        stay_centered_reward = (21.25 - np.linalg.norm(position - self.center)) / self.inner_building_radius  # negative penalty for distance from the center of the track
+        relative_position = np.array([self.agent.x/self.world_width, self.agent.y/self.world_height])
+        center_x, center_y = 0.5, 0.5
+        # Reward is higher if the agent is closer to the edges of the map.
+        circle_outer_reward = np.square(self.agent.x/self.world_width - center_x) + np.square(self.agent.y/self.world_height - center_y)
+        # Reward is higher if the agent is closer to the center of the map.
+        circle_inner_reward = np.square(min(abs(relative_position[0] - 1), relative_position[0])) + np.square(min(abs(relative_position[1] - 1), relative_position[1]))
+
+        #stay_centered_reward = (21.25 - np.linalg.norm(position - self.center)) / self.inner_building_radius  # negative penalty for distance from the center of the track
         terminated = self.world.collision_exists()
         self.state = self.get_state()
         # if (np.linalg.norm(self.state[2:4]*self.agent.max_speed)+1e-7) < self.agent.min_speed:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        # Reward is higher if the agent is closer to the center of the map.
-        # center: self.world_width/2, self.world_height/2
-        center_x, center_y = self.world_width/2, self.world_height/2
-        circle_center_reward = np.square(self.x - center_x) + np.square(self.y - center_y)
-
-        # return self.state, reward, terminated, {"rho": np.array(0)}
-        return self.state, circle_center_reward, terminated, {"rho": np.array(0)}
+        return self.state, circle_inner_reward, terminated, {}
         

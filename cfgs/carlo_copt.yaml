@@ -19,12 +19,12 @@ ppo:
   K_epochs: 5              # update policy for K epochs in one PPO update
   batch_size: 16               # update policy for K epochs in one PPO update
   eps_clip: 0.4          # clip parameter for PPO
-  lr_actor: 0.0001       # learning rate for actor network
+  lr_actor: 0.00025       # learning rate for actor network
   lr_critic: 0.01       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
-  n_traj: 5000
-  alpha: 0.25
+  n_traj: 10000
+  alpha: 0.1
   var_denominator: 1.0
   T: 500
 q_learning:
@@ -48,8 +48,8 @@ n_grad_updates: 1
 delta: .1
 n_seeds: 10
 init_seed: 314
-replay_buffer_size: 5000
+replay_buffer_size: 7500
 checkpoint_freq__n_episodes: 50
-lambda: 100.0
-visualize: False
+lambda: 0.0
+visualize: True
 reward_type: 2

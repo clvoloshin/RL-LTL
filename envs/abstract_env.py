@@ -54,7 +54,7 @@ class AbstractEnv(metaclass=ABCMeta):
         return T, C
 
 class Simulator(gym.Env):
-    def __init__(self, mdp, automaton, lambda_val, buchi_cycle=None, reward_type=2):
+    def __init__(self, mdp, automaton, lambda_val, reward_type=2):
         self.mdp = mdp
         self.automaton = automaton
         spaces = {
@@ -87,8 +87,8 @@ class Simulator(gym.Env):
             all_accepting_cycles.extend(cycles)
         self.all_accepting_cycles = all_accepting_cycles
         self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
-        self.buchi_cycle = all_accepting_cycles[0]  # HARD CODE THIS FOR NOW
-    
+        #import pdb; pdb.set_trace()
+            
     def unnormalize(self, states):
         try:
             return self.mdp.unnormalize(states)
@@ -170,7 +170,7 @@ class Simulator(gym.Env):
                 accepting_rejecting_neutral = 0
             return automaton_state, accepting_rejecting_neutral
     
-    def ltl_reward_1_scalar(self, rhos, terminal, b, b_):
+    def ltl_reward_1_scalar(self, terminal, b, b_):
         if terminal: #took sink
             return 0, True
             #return -1, True
@@ -178,17 +178,17 @@ class Simulator(gym.Env):
             return 1, False
         return 0, False
 
-    def ltl_reward_1(self, rhos, terminal, b, b_):
+    def ltl_reward_1(self, terminal, b, b_):
         # print(f"b_ shape: {b_.shape}")
         # print(f"accepting states: {self.accepting_states}")
         if isinstance(b_, torch.TensorType): 
             b_device = b_.device
             return b_.cpu().apply_(lambda x: x in self.automaton.automaton.accepting_states).float().to(b_device), terminal
         else:
-            return self.ltl_reward_1_scalar(rhos, terminal, b, b_)
+            return self.ltl_reward_1_scalar(terminal, b, b_)
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
-    def ltl_reward_2(self, rhos, terminal, b, b_):
+    def ltl_reward_2(self, terminal, b, b_):
         cycle_rewards = []
 
             #return -1, True
@@ -203,17 +203,6 @@ class Simulator(gym.Env):
         if terminal: #took sink
                 return np.array(cycle_rewards), True
         return np.array(cycle_rewards), False
-    
-    def ltl_reward_3(self, rhos, terminal, b, b_):
-        if terminal: #took sink
-            return -1, True
-        
-        if b in self.buchi_cycle:
-            reward_func = self.buchi_cycle[b][0]
-            r = self.evaluate_buchi_edge(reward_func.stl, rhos)
-            return r, False
-        else: # epsilon transition
-            return 0, False
     
     def evaluate_buchi_edge(self, ast_node, rhos):
         cid = ast_node.id
@@ -237,7 +226,6 @@ class Simulator(gym.Env):
             return -1 * phi_val
 
     def constrained_reward(self, 
-                            rhos, 
                             terminal, 
                             b, 
                             b_, 
@@ -246,9 +234,9 @@ class Simulator(gym.Env):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
         if self.reward_type == 1:
-            ltl_reward, done = self.ltl_reward_1(rhos, terminal, b, b_) #TODO: manually set this for now
+            ltl_reward, done = self.ltl_reward_1(terminal, b, b_) #TODO: manually set this for now
         else:
-            ltl_reward, done = self.ltl_reward_2(rhos, terminal, b, b_) #TODO: manually set this for now
+            ltl_reward, done = self.ltl_reward_2(terminal, b, b_) #TODO: manually set this for now
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
         return mdp_reward + (self.lambda_val * ltl_reward) / self.acc_cycle_edge_counts, done, {"ltl_reward": max(ltl_reward), "mdp_reward": mdp_reward}
     
@@ -260,9 +248,9 @@ class Simulator(gym.Env):
             #epsilon transition
             state = self.mdp.get_state()
             label, _ = self.mdp.label(state)
-            try:
+            if self.mdp.continuous_actions == False:
                 automaton_state, edge = self.automaton.epsilon_step(action - self.mdp.action_space.n) # discrete
-            except:
+            else:
                 automaton_state, edge = self.automaton.epsilon_step(action - 1) # continuous
 
             automaton_state, edge = self.automaton.step(label) # Do we take this step right now???

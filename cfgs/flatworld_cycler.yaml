@@ -1,0 +1,78 @@
+env:
+  _target_: 'envs.base_envs.flatworld.FlatWorld'
+  render_mode: 'human'
+  continuous_actions: True
+classes:
+  discrete: <class 'envs.flatworld.flatworld'>
+  continuous: <class 'envs.flatworld.flatworld_continuous'>
+logger:
+  dir_name: flatworld_stl
+ltl:
+  autobuild: False
+  formula: "G(F(g & X(F(y)))) | G(F(r & X(F(g))))"
+  oa_type: ldba
+  rabinizer: ./rabinizer4/bin/ltl2ldba
+ppo:
+  action_std: 1.8                   # starting std for action distribution (Multivariate Normal)
+  temp_decay_type: 'exponential'
+  temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
+  min_action_temp: 0.1             # stop decay after action_std <= min_action_std and switch to learned std
+  switch_action_temp: 1.78
+  temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
+  K_epochs: 1               # update policy for K epochs in one PPO update
+  batch_size: 128               # update policy for K epochs in one PPO update
+  eps_clip: 0.4          # clip parameter for PPO
+  lr_actor: 0.001       # learning rate for actor network
+  lr_critic: 0.01       # learning rate for critic network
+  update_timestep: 1 # T * 4
+  update_freq__n_episodes: 1
+  n_traj: 5000
+  var_denominator: 1
+  alpha: 0.1
+  T: 50
+sac:
+  action_std: 1.8                   # starting std for action distribution (Multivariate Normal)
+  temp_decay_type: 'exponential'
+  temp_decay_rate: 0.9      # linearly decay action_std (action_std = action_std - action_std_decay_rate)
+  min_action_temp: 0.1             # minimum action_std (stop decay after action_std <= min_action_std)
+  temp_decay_freq__n_episodes: 100       # action_std decay frequency (in num timesteps)
+  batch_size: 512               # update policy for K epochs in one PPO update
+  eps_clip: 0.4          # clip parameter for PPO
+  lr_actor: 0.001       # learning rate for actor network
+  lr_critic: .00001      # learning rate for critic network
+  lr_value: 0.01
+  update_timestep: 1 # T * 4
+  update_freq__n_episodes: 1
+  iterations_per_target_update: 15
+  n_traj: 10000
+  policy_type: 'Gaussian'
+  tau: 0.005  # target smoothing coefficient (default: 0.005)
+  alpha: 0.2  # Temperature parameter alpha determines the relative importance of the entropy term against the reward (default: 0.2)
+  T: 50
+q_learning:
+  batches_per_update: 5
+  batch_size: 128
+  update_freq__n_episodes: 1
+  init_temp: .5
+  temp_decay_freq__n_episodes: 100
+  temp_decay_rate: .9
+  temp_decay_type: 'exponential'
+  min_action_temp: 0.05
+  stl_lr: .00001
+  reward_lr: .00001
+  iterations_per_target_update: 500
+  n_traj: 10000
+  T: 50
+testing:
+  testing_freq__n_episodes: 25
+  num_rollouts: 1
+gamma: .98
+n_grad_updates: 1
+delta: .1
+n_seeds: 10
+init_seed: 623
+replay_buffer_size: 10000
+checkpoint_freq__n_episodes: 50
+lambda: 1000.0
+visualize: True
+reward_type: 2

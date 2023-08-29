@@ -30,9 +30,8 @@ def main(cfg):
             os.mkdir(save_dir)
     else:
         save_dir = None
-    constrained_rew_fxn = {0: [automaton.edges(0, 1)[0]], 1: [automaton.edges(1, 2)[0]], 2: [automaton.edges(2, 0)[0]]}
 
-    sim = Simulator(env, automaton, cfg['lambda'], buchi_cycle=constrained_rew_fxn, reward_type=cfg['reward_type'])
+    sim = Simulator(env, automaton, cfg['lambda'], reward_type=cfg['reward_type'])
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True)) as run:
         # run_Q_STL(cfg, run, sim)
         # copt = ConstrainedOptimization(cfg, run, sim)
