@@ -206,5 +206,11 @@ class CarloEnv:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, reward, terminated, {"rho": np.array(0)}
+        # Reward is higher if the agent is closer to the center of the map.
+        # center: self.world_width/2, self.world_height/2
+        center_x, center_y = self.world_width/2, self.world_height/2
+        circle_center_reward = np.square(self.x - center_x) + np.square(self.y - center_y)
+
+        # return self.state, reward, terminated, {"rho": np.array(0)}
+        return self.state, circle_center_reward, terminated, {"rho": np.array(0)}
         

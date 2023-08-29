@@ -51,5 +51,5 @@ init_seed: 314
 replay_buffer_size: 5000
 checkpoint_freq__n_episodes: 50
 lambda: 100.0
-visualize: True
+visualize: False
 reward_type: 2
