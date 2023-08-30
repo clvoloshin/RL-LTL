@@ -344,9 +344,10 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
 
         # update weights
         # tic = time.time()
-        losstuple = agent.update()
-        if losstuple is not None:
-            current_loss, loss_info = losstuple
+        if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
+            losstuple = agent.update()
+            if losstuple is not None:
+                current_loss, loss_info = losstuple
         # toc2 = time.time() - tic
         # print(toc, toc2)
         

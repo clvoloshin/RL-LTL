@@ -6,7 +6,7 @@ import matplotlib.patches as mpatches
 from matplotlib import colors
 import io
 from PIL import Image
-from gym_minigrid.minigrid import *
+from minigrid.minigrid_env import *
 
 class SlipperyGrid(MiniGridEnv):
     """
@@ -67,8 +67,10 @@ class SlipperyGrid(MiniGridEnv):
             "down",
             "stay"
         ]
-
+        mission_space = MissionSpace(mission_func=lambda : "Do the LTL task.",
+                                         ordered_placeholders=None)
         super().__init__(
+            mission_space=mission_space,
             width = max(self.shape[1], 3),
             height=max(self.shape[0],3),
             max_steps=1000,
@@ -178,8 +180,7 @@ class SlipperyGrid(MiniGridEnv):
             import pdb; pdb.set_trace()
         done = False
         info = {'state': self.current_state}
-
-        return next_state, cost, done, info
+        return next_state, 0, done, info
     
     def cost_shaping(self, prev_index, cur_index, action, automaton_movement, accepting_state_reached, rejecting_state_reached):
         
@@ -224,18 +225,18 @@ class SlipperyGrid(MiniGridEnv):
     
     # For rendering
     def _gen_grid(self, width, height):
-        self.agent_pos = self.current_state[::-1]
+        self.agent_pos = tuple(self.current_state[::-1])
         self.agent_dir = 0
         self.grid = Grid(width, height)
         self.mission = ''
-
+        #import pdb; pdb.set_trace()
         # for row in range(len(labels)):
         #     for col, label in enumerate(labels[row]):
         #         if label == 'safe': continue
         #         self.grid.set(row, col, Floor())
     
     def render(self, mode='human', **kw):
-        self.agent_pos = self.current_state[::-1]
+        self.agent_pos = tuple(self.current_state[::-1])
         self.agent_dir = 0
         # print(self.agent_pos[::-1])
         super().render()

@@ -2,29 +2,33 @@ import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
 from torch.distributions import Categorical
-
+from tqdm import tqdm
 import logger
 import matplotlib.pyplot as plt
 from utls.plotutils import plot_something_live
 import numpy as np
+import wandb
 from policies.dqn import Buffer, DQN
 
 # ################################## set device ##################################
 # print("============================================================================================")
 # # set device to cpu or cuda
 device = torch.device('cpu')
-# if(torch.cuda.is_available()): 
-#     device = torch.device('cuda:0') 
-#     torch.cuda.empty_cache()
-#     print("Device set to : " + str(torch.cuda.get_device_name(device)))
-# else:
-#     print("Device set to : cpu")
+if(torch.cuda.is_available()): 
+    device = torch.device('cuda:0') 
+    torch.cuda.empty_cache()
+    print("Device set to : " + str(torch.cuda.get_device_name(device)))
+else:
+    print("Device set to : cpu")
 # print("============================================================================================")
 
 
 class Q_learning:
-    def __init__(self, env_space, act_space, gamma, param) -> None:
-
+    def __init__(self, env_space, act_space, gamma, num_cycles, param) -> None:
+        if len(env_space['mdp'].shape) == 0:
+            envsize = (1,)
+        else:
+            envsize = env_space['mdp'].shape
         self.Q = DQN(env_space, act_space, param).to(device)
         self.Q_target = DQN(env_space, act_space, param).to(device)
         
@@ -33,8 +37,8 @@ class Q_learning:
                     ])
 
         self.update_target_network()
-
-        self.buffer = Buffer(env_space['mdp'].shape, param['replay_buffer_size'])
+        self.num_cycles = num_cycles
+        self.buffer = Buffer(envsize, self.num_cycles, param['replay_buffer_size'])
         self.temp = param['q_learning']['init_temp']
         
         self.n_batches = param['q_learning']['batches_per_update']
@@ -44,6 +48,8 @@ class Q_learning:
         
         self.gamma = gamma
         self.n_mdp_actions = act_space['mdp'].n
+        
+        self.ltl_lambda = param['lambda']
     
     def update_target_network(self):
         # copy current_network to target network
@@ -52,20 +58,20 @@ class Q_learning:
     def select_action(self, state, is_testing):
         if is_testing or (np.random.uniform() > self.temp):
             with torch.no_grad():
-                state_tensor = torch.FloatTensor(state['mdp']).to(device)
+                state_tensor = torch.tensor(state['mdp']).float().to(device)
                 buchi = state['buchi']
-                action, is_eps, action_logprob = self.Q.act(state_tensor, buchi)
+                action, is_eps = self.Q.act(state_tensor, buchi)
 
-            return action, is_eps, action_logprob
+            return action, is_eps
         else:
             with torch.no_grad():
-                state_tensor = torch.FloatTensor(state['mdp']).to(device)
+                state_tensor = torch.tensor(state['mdp']).float().to(device)
                 buchi = state['buchi']
-                action, is_eps, action_logprob = self.Q.random_act(state, buchi)
-            return action, is_eps, action_logprob
+                action, is_eps = self.Q.random_act(state, buchi)
+            return action, is_eps
 
-    def collect(self, s, b, a, r, s_, b_):
-        self.buffer.add(s, b, a, r, s_, b_)
+    def collect(self, s, b, a, r, lr, cr, s_, b_):
+        self.buffer.add(s, b, a, r, lr, cr, s_, b_)
     
     def decay_temp(self, decay_rate, min_temp, decay_type):
         
@@ -86,20 +92,29 @@ class Q_learning:
         for _ in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():
-                s, b, a, r, s_, b_ = self.buffer.sample(self.batch_size)
-                s = torch.tensor(s).type(torch.float)
-                b = torch.tensor(b).type(torch.int64).unsqueeze(1).unsqueeze(1)
-                s_ = torch.tensor(s_).type(torch.float)
-                b_ = torch.tensor(b_).type(torch.int64).unsqueeze(1).unsqueeze(1)
+                s, b, a, r, lr, cr, s_, b_ = self.buffer.sample(self.batch_size)
+                s = torch.tensor(s).type(torch.float).to(device)
+                b = torch.tensor(b).type(torch.int64).unsqueeze(1).unsqueeze(1).to(device)
+                s_ = torch.tensor(s_).type(torch.float).to(device)
+                b_ = torch.tensor(b_).type(torch.int64).unsqueeze(1).unsqueeze(1).to(device)
                 r = torch.tensor(r)
-                a = torch.tensor(a)
-                targets = r + self.gamma * self.Q_target(s_, b_).amax(1)
+                lr = torch.tensor(lr)
+                cr = torch.tensor(cr).to(device)
+                a = torch.tensor(a).to(device)
+                best_cycle_idx = torch.argmax(cr.sum(dim=0)).item()
+                crewards = cr[:, best_cycle_idx]
+                targets = crewards + self.gamma * self.Q_target(s_, b_).amax(1)
 
             q_values = self.Q(s, b, False).gather(1, a.unsqueeze(1))
             # td_error = q_values - targets.to_tensor(0).unsqueeze(1).clone().detach()
 
             loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.to_tensor(0).unsqueeze(1).clone().detach())
+            
+            # if self.ltl_lambda != 0:
+            #     normalized_val_loss = loss / (self.ltl_lambda / (1 - self.gamma))
+            # else:
+            #     normalized_val_loss = loss
 
             # loss = (td_error**2).mean() # MSE
 
@@ -111,81 +126,85 @@ class Q_learning:
             if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
                 self.update_target_network()
                 self.iterations_since_last_target_update = 0
+        return loss.detach().mean()
 
-def rollout(env, agent, param, i_episode, testing=False, visualize=False):
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None):
+    states, buchis = [], []
     state, _ = env.reset()
-    ep_reward = 0
+    mdp_ep_reward = 0
+    ltl_ep_reward = 0
     disc_ep_reward = 0
+    states.append(state['mdp'])
+    buchis.append(state['buchi'])
     if not testing: agent.buffer.restart_traj()
     if testing & visualize:
         s = torch.tensor(state['mdp']).type(torch.float)
         b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
-        print(0, state['mdp'], state['buchi'], agent.Q(s, b).argmax().to_tensor(0).numpy())
-        print(agent.Q(s, b))
+        #print(0, state['mdp'], state['buchi'], agent.Q(s, b).argmax().to_tensor(0).numpy())
+        #print(agent.Q(s, b))
     
-    for t in range(1, param['T']):  # Don't infinite loop while learning
-        action, is_eps, log_prob = agent.select_action(state, testing)
+    for t in range(1, param['q_learning']['T']):  # Don't infinite loop while learning
+        action, is_eps = agent.select_action(state, testing)
         
-        next_state, cost, done, info = env.step(action, is_eps)
-        reward = info['is_accepting']
-
-        if testing & visualize:
-            s = torch.tensor(next_state['mdp']).type(torch.float)
-            b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
-            print(t, next_state['mdp'], next_state['buchi'], agent.Q(s, b).argmax().to_tensor(0).numpy())
-            print(agent.Q(s, b))
+        next_state, mdp_reward, done, info = env.step(action, is_eps)
+        
+        terminal = info['is_rejecting']
+        constrained_reward, _, rew_info = env.constrained_reward(terminal, state['buchi'], next_state['buchi'], mdp_reward)
 
         if not testing: # TRAIN ONLY
             # Simulate step for each buchi state
             if not is_eps:
                 for buchi_state in range(env.observation_space['buchi'].n):
                     next_buchi_state, is_accepting = env.next_buchi(next_state['mdp'], buchi_state)
-                    agent.collect(state['mdp'], buchi_state, action, is_accepting, next_state['mdp'], next_buchi_state)
+                    constrained_reward, _, rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
+                    agent.collect(state['mdp'], buchi_state, action, mdp_reward, rew_info["ltl_reward"], constrained_reward, next_state['mdp'], next_buchi_state)
                     if buchi_state == state['buchi']:
-                        reward = is_accepting
                         agent.buffer.mark()
                 
                     # also add epsilon transition 
                     try:                        
                         for eps_idx in range(env.action_space[buchi_state].n):
                             next_buchi_state, is_accepting = env.next_buchi(state['mdp'], buchi_state, eps_idx)
-                            agent.collect(state['mdp'], buchi_state, env.action_space['mdp'].n + eps_idx, is_accepting, state['mdp'], next_buchi_state)
+                            constrained_reward, _, rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
+                            agent.collect(state['mdp'], buchi_state, action, mdp_reward, rew_info["ltl_reward"], constrained_reward, next_state['mdp'], next_buchi_state)
                     except:
                         pass
 
             else:
                 # no reward for epsilon transition !
-                agent.collect(state['mdp'], state['buchi'], action, 0, next_state['mdp'], next_state['buchi'])
+                agent.collect(state['mdp'], buchi_state, action, mdp_reward, rew_info["ltl_reward"], constrained_reward, next_state['mdp'], next_buchi_state)
                 agent.buffer.mark()
-                reward = 0
-
-        if visualize:
-            env.render()
         # agent.buffer.atomics.append(info['signal'])
-        ep_reward += reward
-        disc_ep_reward += param['gamma']**(t-1) * reward
+        mdp_ep_reward += rew_info["mdp_reward"]
+        ltl_ep_reward += rew_info["ltl_reward"]
+        disc_ep_reward += param['gamma']**(t-1) * mdp_reward
 
         if done:
             break
         state = next_state
-
-    return ep_reward, disc_ep_reward, t
+    if visualize:
+        save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
+        img = env.render(states=states, save_dir=save_dir)
+        if img is not None:
+            if testing: 
+                runner.log({"testing": wandb.Image(img)})
+        elif save_dir is not None:  # if we're in an environment that can't generate an image as in-python array
+            # load image from save dir
+        # frames = 
+        # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
+            if testing: 
+                runner.log({"testing": wandb.Image(save_dir + "/trajectory.png")})
+    return mdp_ep_reward, ltl_ep_reward, t
         
-def run_Q_continuous(param, env, second_order = False):
-    
-    agent = Q_learning(env.observation_space, env.action_space, param['gamma'], param)
-    fig, axes = plt.subplots(2, 1)
-    history = []
-    success_history = []
-    running_reward = 10
+def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None):
+    agent = Q_learning(env.observation_space, env.action_space, param['gamma'], env.num_cycles, param)
     fixed_state, _ = env.reset()
-
-    for i_episode in range(param['n_traj']):
+    for i_episode in tqdm(range(param['q_learning']['n_traj'])):
         # TRAINING
-        ep_reward, disc_ep_reward, t = rollout(env, agent, param, i_episode, testing=False)
+        mdp_ep_reward, ltl_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
-            agent.update()
+            current_loss = agent.update()
         
         if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0:
             agent.decay_temp(param['q_learning']['temp_decay_rate'], param['q_learning']['min_action_temp'], param['q_learning']['temp_decay_type'])
@@ -193,26 +212,31 @@ def run_Q_continuous(param, env, second_order = False):
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                test_data.append(rollout(env, agent, param, test_iter, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) ))
+                mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) )
             test_data = np.array(test_data)
     
         if i_episode % 1 == 0:
-            avg_timesteps = t #np.mean(timesteps)
-            history += [disc_ep_reward]
-            # success_history += [env.did_succeed(state, action, reward, next_state, done, t + 1)]
-            success_history += [test_data[:, 0].mean()]
-            method = 'TR' if second_order else 'Adam'
-            plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
-            logger.logkv('Iteration', i_episode)
-            logger.logkv('Method', method)
-            logger.logkv('Success', success_history[-1])
-            logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
-            logger.logkv('EpisodeReward', ep_reward)
-            logger.logkv('DiscEpisodeReward', disc_ep_reward)
-            logger.logkv('TimestepsAlive', avg_timesteps)
-            logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['T'])
-            logger.logkv('ActionTemp', agent.temp)
-            
-            logger.dumpkvs()
+            runner.log({#'Iteration': i_episode,
+            #  'last_reward': last_reward,
+            #  'Method': method,
+            #  'Success': success_history[-1],
+            #  'Last20Success': np.mean(np.array(success_history[-20:])),
+            #  'DiscSuccess': disc_success_history[-1],
+            #  'Last20DiscSuccess': np.mean(np.array(disc_success_history[-20:])),
+            #  'EpisodeReward': ep_reward,
+            #  'DiscEpisodeReward': disc_ep_reward,
+            # 'EpisodeRhos': stl_val,
+            # 'ExpectedQVal': max_q_val,
+                'R_LTL': ltl_ep_reward,
+                'R_MDP': mdp_ep_reward,
+                'LossVal': current_loss,
+                #'AvgTimesteps': t,
+                #  'TimestepsAlive': avg_timesteps,
+                #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
+                    'ActionTemp': agent.temp,
+                    #'EntropyLoss': loss_info["entropy_loss"],
+                    "Test_R_LTL": ltl_test_reward,
+                    "Test_R_MDP": mdp_test_reward
+                    })
             
     plt.close()

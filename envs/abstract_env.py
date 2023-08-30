@@ -87,6 +87,10 @@ class Simulator(gym.Env):
             all_accepting_cycles.extend(cycles)
         self.all_accepting_cycles = all_accepting_cycles
         self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
+        self.fixed_cycle = None
+        self.num_cycles = len(self.all_accepting_cycles)
+        if self.reward_type != 2: ## IF we have a fixed reward:
+            self.num_cycles = 1 # only reward one thing
         #import pdb; pdb.set_trace()
             
     def unnormalize(self, states):
@@ -185,7 +189,8 @@ class Simulator(gym.Env):
             b_device = b_.device
             return b_.cpu().apply_(lambda x: x in self.automaton.automaton.accepting_states).float().to(b_device), terminal
         else:
-            return self.ltl_reward_1_scalar(terminal, b, b_)
+            reward, terminal = self.ltl_reward_1_scalar(terminal, b, b_)
+            return np.array([reward]), terminal
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
     def ltl_reward_2(self, terminal, b, b_):
@@ -203,6 +208,16 @@ class Simulator(gym.Env):
         if terminal: #took sink
                 return np.array(cycle_rewards), True
         return np.array(cycle_rewards), False
+    
+    def ltl_reward_3(self, terminal, b, b_):
+        if terminal:
+            reward = 0
+        if b in self.fixed_cycle:
+            if b_ == self.fixed_cycle[b].child.id:
+                reward = 1.0
+            else:
+                reward = 0.0
+        return np.array([reward]), not terminal
     
     def evaluate_buchi_edge(self, ast_node, rhos):
         cid = ast_node.id

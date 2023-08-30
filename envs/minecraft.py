@@ -1,14 +1,14 @@
 from .base_envs.slippery_grid import SlipperyGrid
 from functools import partial
 import numpy as np
-from gym_minigrid.minigrid import Floor, Key
+from minigrid.core.world_object import Floor, Key
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib import colors
 from scipy.stats.kde import gaussian_kde
 import PIL.Image as Image
 from numpy import uint8
-from gym_minigrid.minigrid import *
+from minigrid.core.world_object import *
 import os
 
 OBJECT_TO_IDX.update({'ghost': len(OBJECT_TO_IDX)})
