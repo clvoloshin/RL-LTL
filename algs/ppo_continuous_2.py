@@ -287,7 +287,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # frames = 
         # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
             if testing: 
-                runner.log({"testing": wandb.Image(save_dir + "/trajectory.png")})
+                runner.log({"testing": wandb.Image(save_dir)})
             # else:
             #     runner.log({"training": wandb.Image(env.render(states=states, save_dir=None))})
     # print('Get Experience', total_experience_time)
@@ -331,7 +331,6 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     # disc_success_history = []
     fixed_state, _ = env.reset()
     #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
-
 
     for i_episode in tqdm(range(param['ppo']['n_traj'])):
         # TRAINING

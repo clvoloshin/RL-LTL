@@ -1,6 +1,6 @@
 import numpy as np
 from .world import World
-from .agents import Car, RingBuilding, CircleBuilding, Painting, Pedestrian
+from .agents import Car, RingBuilding, CircleBuilding, Painting, Pedestrian, RectangleBuilding
 from .geometry import Point, Line
 import time
 # from tkinter import *
@@ -12,57 +12,74 @@ from moviepy.video.io.bindings import mplfig_to_npimage
 class CarloEnv:
     def __init__(self, continuous_actions=True):
         dt = 0.1 # time steps in terms of seconds. In other words, 1/dt is the FPS.
-        world_width = 120/2 # in meters
+        world_width = 200/2 # in meters
         world_height = 120/2
-        self.inner_building_radius = 20/2
-        num_lanes = 2
+        self.inner_building_radius = 25/2
+        # num_lanes = 2
         self.lane_marker_width = 0.75
-        num_of_lane_markers = 52/2
-        self.lane_width = 8.5# 3.5
+        # num_of_lane_markers = 52/2
+        self.lane_width = 5.5# 3.5
         self.continuous_actions = continuous_actions
         self.ppm = 15
+        self.border_radius = 2.5
 
         w = World(dt, width = world_width, height = world_height, ppm = self.ppm) # The world is 120 meters by 120 meters. ppm is the pixels per meter.
 
         # Let's add some sidewalks and RectangleBuildings.
         # A Painting object is a rectangle that the vehicles cannot collide with. So we use them for the sidewalks / zebra crossings / or creating lanes.
         # A CircleBuilding or RingBuilding object is also static -- they do not move. But as opposed to Painting, they can be collided with.
-
-        # To create a circular road, we will add a CircleBuilding and then a RingBuilding around it
-        cb = CircleBuilding(Point(world_width/2, world_height/2), self.inner_building_radius, 'gray80')
-        w.add(cb)
-        rb = RingBuilding(Point(world_width/2, world_height/2), self.inner_building_radius + num_lanes * self.lane_width + (num_lanes - 1) * self.lane_marker_width, 1+np.sqrt((world_width/2)**2 + (world_height/2)**2), 'gray80')
-        w.add(rb)
-
-        # w.add(CircleBuilding(Point(72.5, 107.5), Point(95, 25))) 
-
-
-        # Let's also add some lane markers on the ground. This is just decorative. Because, why not.
-        self.waypoints = []
-        for lane_no in range(num_lanes - 1):
-            lane_markers_radius = self.inner_building_radius + (lane_no + 1) * self.lane_width + (lane_no + 0.5) * self.lane_marker_width
-            lane_marker_height = 0.5 #np.sqrt(2*(lane_markers_radius**2)*(1-np.cos((2*np.pi)/(2*num_of_lane_markers)))) # approximate the circle with a polygon and then use cosine theorem
-            lane_marker_width = self.lane_width * num_lanes
-            for i, theta in enumerate(np.arange(0, 2*np.pi, 2*np.pi / num_of_lane_markers)):
-                dx = lane_markers_radius * np.cos(theta)
-                dy = lane_markers_radius * np.sin(theta)
-                if (i % 13 == 0) & (i > -1):
-                    self.waypoints.append(
-                        #CircleBuilding(Point(world_width/2 + dx + (0 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (0 * self.lane_width) * np.sin(theta)), 5, 'blue')
-                        Painting(Point(world_width/2 + dx + (0 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (0 * self.lane_width) * np.sin(theta)), Point(lane_marker_width, lane_marker_height), 'blue', heading=theta)
-                        )
-                    wp = self.waypoints[-1]
-                    wp.collidable = False
-                    w.add(wp)
-                # w.add(Painting(Point(world_width/2 + dx, world_height/2 + dy), Point(self.lane_marker_width, lane_marker_height), 'white', heading = theta))
         
-        # Let's also add some lane markers on the ground. This is just decorative. Because, why not.
-        # self.waypoints = self.waypoints[[]]
+        # To create a figure-eight road, we will add two CircleBuilding and then two RingBuildings around them
+        cb1 = CircleBuilding(Point(world_width* (3/10), world_height/2), self.inner_building_radius, 'gray80')
+        cb2 = CircleBuilding(Point(world_width* (7/10), world_height/2), self.inner_building_radius, 'gray80')
+        self.cb1 = cb1
+        self.cb2 = cb2
+        w.add(cb1)
+        w.add(cb2)
+        toprect = RectangleBuilding(Point(world_width /2, world_height - self.border_radius), Point(world_width, self.border_radius * 2), 'gray80')
+        bottomrect = RectangleBuilding(Point(world_width / 2., self.border_radius), Point(world_width, self.border_radius * 2), 'gray80')
+        leftrect = RectangleBuilding(Point(self.border_radius, world_height / 2), Point(self.border_radius * 2, world_height - (self.border_radius * 4)), 'gray80')
+        rightrect = RectangleBuilding(Point(world_width - self.border_radius, world_height / 2), Point(self.border_radius * 2, world_height - (self.border_radius * 4)), 'gray80')
+        w.add(toprect)
+        w.add(bottomrect)
+        w.add(leftrect)
+        w.add(rightrect)
+                
+        
 
+        # Let's also add some lane markers on the ground as waypoints for the LTL specification
+        self.waypoints = []
+        # for lane_no in range(num_lanes - 1):
+        #     lane_markers_radius = self.inner_building_radius + (lane_no + 1) * self.lane_width + (lane_no + 0.5) * self.lane_marker_width
+        #     lane_marker_height = 0.5 #np.sqrt(2*(lane_markers_radius**2)*(1-np.cos((2*np.pi)/(2*num_of_lane_markers)))) # approximate the circle with a polygon and then use cosine theorem
+        #     lane_marker_width = self.lane_width * num_lanes
+        #     for i, theta in enumerate(np.arange(0, 2*np.pi, 2*np.pi / num_of_lane_markers)):
+        #         dx = lane_markers_radius * np.cos(theta)
+        #         dy = lane_markers_radius * np.sin(theta)
+        #         if (i % 13 == 0) & (i > -1):
+        #             self.waypoints.append(
+        #                 #CircleBuilding(Point(world_width/2 + dx + (0 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (0 * self.lane_width) * np.sin(theta)), 5, 'blue')
+        #                 Painting(Point(world_width/4 + dx + (0 * self.lane_width) * np.cos(theta) , world_height/2 + dy + (0 * self.lane_width) * np.sin(theta)), Point(lane_marker_width, lane_marker_height), 'blue', heading=theta)
+        #                 )
+        #             wp = self.waypoints[-1]
+        #             wp.collidable = False
+        #             w.add(wp)
+                # w.add(Painting(Point(world_width/2 + dx, world_height/2 + dy), Point(self.lane_marker_width, lane_marker_height), 'white', heading = theta))
+        lane_marker_height = 0.5 #np.sqrt(2*(lane_markers_radius**2)*(1-np.cos((2*np.pi)/(2*num_of_lane_markers)))) # approximate the circle with a polygon and then use cosine theorem
+        # import pdb; pdb.set_trace()
+        lane_marker_width = cb1.center.x - cb1.radius - self.border_radius * 2
+        self.lane_marker_width = lane_marker_width
+        # Let's also add some lane markers on the ground. This is just decorative. Because, why not.
+        self.waypoints.append(Painting(Point(self.border_radius  * 2 + (lane_marker_width / 2.), world_height / 2.), Point(lane_marker_width, lane_marker_height), 'blue'))
+        self.waypoints.append(Painting(Point(world_width - (self.border_radius  * 2 + (lane_marker_width / 2.)), world_height / 2.),
+                                       Point(lane_marker_width, lane_marker_height), 'blue'))
+        for wp in self.waypoints:
+            wp.collidable = False
+            w.add(wp) 
         # A Car object is a dynamic object -- it can move. We construct it using its center location and heading angle.
         self.world_width = world_width
         self.world_height = world_height
-        self.center = np.array([30, 30])
+        self.center = np.array([self.world_width / 2, self.world_height / 2])
         self.dt = dt
         self.world = w
         self.reset()
@@ -87,14 +104,20 @@ class CarloEnv:
         self.world.reset()
         
         self.current_wp = 0
-
+        self.starting_region = np.random.choice(2)
         xs = np.linspace(np.pi/2, 2*np.pi+np.pi/2, 10)
         theta = np.random.choice(xs) % (np.pi*2)
-        lane_markers_radius = self.inner_building_radius + (0 + 1) * self.lane_width + (0 + 0.5) * self.lane_marker_width
+        lane_markers_radius = self.inner_building_radius + (0 + 1) * (self.lane_marker_width - 1) #+ (0 + 0.5) * self.lane_marker_width
         dx = lane_markers_radius * np.cos(theta)
         dy = lane_markers_radius * np.sin(theta)
-        x = self.world_width/2 + dx
-        y = self.world_height/2 + dy
+        if self.starting_region == 0:
+            x = self.cb1.center.x + dx
+            y = self.cb1.center.y + dy
+        else:
+            x = self.cb2.center.x + dx
+            y = self.cb2.center.y + dy
+        # x = self.world_width/2 + dx
+        # y = self.world_height/2 + dy
 
         c1 = Car(Point(x, y), theta + np.pi/2)
         c1.max_speed = 30.0 # let's say the maximum is 30 m/s (108 km/h)
@@ -120,7 +143,7 @@ class CarloEnv:
         
         # import pdb; pdb.set_trace()
         for idx, distance in enumerate(self.distance_to_waypoints(state)):
-            if distance <= 5:
+            if distance <= 3:
                 key = 'wp_%s' % idx
                 labels.update({key: 1})
         # if len(labels): import pdb; pdb.set_trace()
@@ -165,7 +188,7 @@ class CarloEnv:
                 # self.world.visualizer.win.plot_line(coords.T.flatten().tolist(), color='green')
             #import pdb; pdb.set_trace()
             self.world.render()
-
+            #import pdb; pdb.set_trace()
             if save_dir is not None:
                 self.world.visualizer.save_fig(save_dir)
                 self.world.remove_agents()

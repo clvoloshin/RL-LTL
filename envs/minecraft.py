@@ -95,7 +95,7 @@ class Minecraft(SlipperyGrid):
 
         
     
-    def render(self, states = [], save_dir=None, mode='human', **kw):
+    def render(self, states = [], save_dir=None, mode='rgb_array', **kw):
 
         rows = []
         cols = []
@@ -107,13 +107,14 @@ class Minecraft(SlipperyGrid):
             for row, col in zip(rows, cols):
                 self.coins[row, col].toggle_on(self, [row, col])
 
-        super().render(mode, highlight=False, **kw)
+        img = super().render(mode, highlight=False, **kw)
         
         for row, col in zip(rows, cols):
             self.coins[row, col].toggle_off(self, [row, col])
+        return img
         
-        if save_dir is not None:
-            self.window.fig.savefig(save_dir)
+        # if save_dir is not None:
+        #     self.window.fig.savefig(save_dir)
 
 
 

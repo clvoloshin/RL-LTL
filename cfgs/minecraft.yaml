@@ -19,7 +19,7 @@ q_learning:
   temp_decay_freq__n_episodes: 25
   temp_decay_rate: .05
   min_action_temp: 0.
-  n_traj: 250
+  n_traj: 1000
   T: 100
   init_temp: .3
   lr: .001

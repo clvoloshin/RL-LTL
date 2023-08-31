@@ -488,6 +488,8 @@ class ActorCritic(nn.Module):
             # Fix
             probs_all = self.masked_softmax(action_switch, mask, -1)
             probs = probs_all.squeeze()
+            if len(probs.shape) == 1:  # if it's just 1d batch, unsqueeze it
+                probs = probs.unsqueeze(1)
             dist_coinflip = Categorical(probs)
             
 

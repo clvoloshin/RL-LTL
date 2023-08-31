@@ -212,7 +212,7 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize= ((i_episode % 50) == 0) & (test_iter == 0) )
+                mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir)
             test_data = np.array(test_data)
     
         if i_episode % 1 == 0:

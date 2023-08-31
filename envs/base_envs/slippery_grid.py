@@ -76,6 +76,7 @@ class SlipperyGrid(MiniGridEnv):
             max_steps=1000,
             # Set this to True for maximum speed
             see_through_walls=True,
+            render_mode="rgb_array"
         )
         super().reset()
 
@@ -235,11 +236,11 @@ class SlipperyGrid(MiniGridEnv):
         #         if label == 'safe': continue
         #         self.grid.set(row, col, Floor())
     
-    def render(self, mode='human', **kw):
+    def render(self, mode='rgb_array', **kw):
         self.agent_pos = tuple(self.current_state[::-1])
         self.agent_dir = 0
         # print(self.agent_pos[::-1])
-        super().render()
+        return super().render()
 
 
             
