@@ -12,15 +12,15 @@ from moviepy.video.io.bindings import mplfig_to_npimage
 class CarloEnv:
     def __init__(self, continuous_actions=True):
         dt = 0.1 # time steps in terms of seconds. In other words, 1/dt is the FPS.
-        world_width = 200/2 # in meters
-        world_height = 120/2
-        self.inner_building_radius = 25/2
+        world_width = 170/2 # in meters
+        world_height = 100/2
+        self.inner_building_radius = 20/2
         # num_lanes = 2
         self.lane_marker_width = 0.75
         # num_of_lane_markers = 52/2
         self.lane_width = 5.5# 3.5
         self.continuous_actions = continuous_actions
-        self.ppm = 15
+        self.ppm = 20
         self.border_radius = 2.5
 
         w = World(dt, width = world_width, height = world_height, ppm = self.ppm) # The world is 120 meters by 120 meters. ppm is the pixels per meter.
@@ -107,7 +107,7 @@ class CarloEnv:
         self.starting_region = np.random.choice(2)
         xs = np.linspace(np.pi/2, 2*np.pi+np.pi/2, 10)
         theta = np.random.choice(xs) % (np.pi*2)
-        lane_markers_radius = self.inner_building_radius + (0 + 1) * (self.lane_marker_width - 1) #+ (0 + 0.5) * self.lane_marker_width
+        lane_markers_radius = self.inner_building_radius + (0 + 1) * (self.lane_marker_width - 2) #+ (0 + 0.5) * self.lane_marker_width
         dx = lane_markers_radius * np.cos(theta)
         dy = lane_markers_radius * np.sin(theta)
         if self.starting_region == 0:

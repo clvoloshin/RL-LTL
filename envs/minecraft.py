@@ -106,8 +106,8 @@ class Minecraft(SlipperyGrid):
             
             for row, col in zip(rows, cols):
                 self.coins[row, col].toggle_on(self, [row, col])
-
-        img = super().render(mode, highlight=False, **kw)
+        # import pdb; pdb.set_trace()
+        img = super().render(mode, highlight=True, **kw)
         
         for row, col in zip(rows, cols):
             self.coins[row, col].toggle_off(self, [row, col])

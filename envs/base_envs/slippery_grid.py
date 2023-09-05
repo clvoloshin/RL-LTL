@@ -170,6 +170,7 @@ class SlipperyGrid(MiniGridEnv):
                 next_state = self.current_state
 
         # update current state
+        reward = 1.0 if (next_state != self.current_state) else 0.0
         prev_state = self.current_state
         self.current_state = next_state
 

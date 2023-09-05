@@ -307,15 +307,17 @@ class RolloutBuffer:
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, action_std_init, param):
+    def __init__(self, state_dim, action_dim, action_std_init, param, has_continuous_action_space=True):
         super(ActorCritic, self).__init__()
 
-        has_continuous_action_space = True
         self.has_continuous_action_space = has_continuous_action_space        
         self.temp = action_std_init
         self.var_denominator = param['ppo']['var_denominator']
         if has_continuous_action_space:
             self.action_dim = action_dim['mdp'].shape[0]
+            self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init, requires_grad=True).to(device)
+        else:
+            self.action_dim = action_dim['total']
             self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init, requires_grad=True).to(device)
         # actor
         if has_continuous_action_space :

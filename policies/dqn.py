@@ -70,6 +70,9 @@ class Buffer:
         return self.states[idxs], self.buchis[idxs], self.actions[idxs], self.rewards[idxs], self.ltl_rewards[idxs], self.cycle_rewards[idxs], self.next_states[idxs], self.next_buchis[idxs]
 
     def sample(self, batchsize):
+        if self.counter < batchsize:
+            import pdb; pdb.set_trace()
+            return self.states, self.buchis, self.actions, self.rewards, self.ltl_rewards, self.cycle_rewards, self.next_states, self.next_buchis
         idxs = np.random.random_integers(0, min(self.counter, self.max_-1), batchsize)
         return self.states[idxs], self.buchis[idxs], self.actions[idxs], self.rewards[idxs], self.ltl_rewards[idxs], self.cycle_rewards[idxs], self.next_states[idxs], self.next_buchis[idxs]
 
@@ -114,14 +117,15 @@ class DQN(nn.Module):
         return out
     
     def act(self, state, buchi_state):
-        if len(state.shape) == 0:
-            state = state.unsqueeze(0).to(device)
-        #import pdb; pdb.set_trace()
-        qs = torch.reshape(self.actor(state), self.shp)[buchi_state]
-        masked_qs = torch.masked.MaskedTensor(qs, self.mask[buchi_state])
-        act = int(masked_qs.argmax())
-        is_eps = act >= self.n_mdp_actions
-        return act, is_eps
+        with torch.no_grad():
+            if len(state.shape) == 0:
+                state = state.unsqueeze(0).to(device)
+            #mport pdb; pdb.set_trace()
+            qs = torch.reshape(self.actor(state), self.shp)[buchi_state]
+            masked_qs = torch.masked.MaskedTensor(qs, self.mask[buchi_state])
+            act = int(masked_qs.argmax())
+            is_eps = act >= self.n_mdp_actions
+            return act, is_eps
     
     def random_act(self, state, buchi_state):
         X = self.mask[buchi_state].cpu().numpy()

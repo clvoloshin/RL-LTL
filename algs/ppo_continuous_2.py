@@ -32,7 +32,8 @@ class PPO:
             act_space, 
             gamma, 
             param, 
-            to_hallucinate=False
+            to_hallucinate=False,
+            model_path=None
             ) -> None:
 
         lr_actor = param['ppo']['lr_actor']
@@ -47,6 +48,8 @@ class PPO:
         self.ltl_lambda = param['lambda']
 
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
+        if model_path:
+            self.policy.load_state_dict(torch.load(model_path))
         
         self.optimizer = torch.optim.Adam([
                         {'params': self.policy.actor.parameters(), 'lr': lr_actor},
@@ -87,6 +90,9 @@ class PPO:
     def collect(self, s, b, a, r, s_, b_):
         # TODO: update this part
         self.buffer.add(s, b, a, r, s_, b_)
+        
+    def save_model(self, save_path):
+        torch.save(self.policy.state_dict(), save_path)
     
     def decay_temp(self, decay_rate, min_temp, decay_type):
         
@@ -299,7 +305,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # except:
     #     pass
     #print(action)
-    return mdp_ep_reward, ltl_ep_reward, t
+    return mdp_ep_reward, ltl_ep_reward, max(constrained_reward), t
         
 def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False, visualize=True, save_dir=None):
     
@@ -323,7 +329,8 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         env.action_space, 
         param['gamma'], 
         param, 
-        to_hallucinate)
+        to_hallucinate,
+        model_path=param['load_path'])
     
     # fig, axes = plt.subplots(2, 1)
     # history = []
@@ -331,13 +338,13 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     # disc_success_history = []
     fixed_state, _ = env.reset()
     #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
-
+    best_creward = 0
     for i_episode in tqdm(range(param['ppo']['n_traj'])):
         # TRAINING
 
         # Get trajectory
         # tic = time.time()
-        mdp_ep_reward, ltl_ep_reward, t = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
+        mdp_ep_reward, ltl_ep_reward, creward, t = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
 
@@ -356,7 +363,10 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+                mdp_test_reward, ltl_test_reward, creward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+                if creward > best_creward:
+                    best_creward = creward
+                    agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
             test_data = np.array(test_data)
     
         if i_episode > 1 and i_episode % 1 == 0:

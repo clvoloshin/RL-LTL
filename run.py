@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import os
 from omegaconf import OmegaConf
+from datetime import datetime
 from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_value_iter_2 import run_value_iter
@@ -22,15 +23,12 @@ def main(cfg):
     env = hydra.utils.instantiate(cfg.env)
     automaton = AutomatonRunner(Automaton(**cfg['ltl']))
     # make logging dir for wandb to pull from, if necessary
-    if cfg["visualize"]:
-        save_dir = os.path.join(os.getcwd(), 'experiments', cfg['logger']['dir_name'])
-        if not os.path.exists(save_dir):
-            os.mkdir(save_dir)
-    else:
-        save_dir = None
-
+    save_dir = os.path.join(os.getcwd(), 'experiments', cfg['logger']['dir_name'])
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+    run_name = cfg['run_name'] + '_seed' + str(cfg['init_seed']) + '_lambda' + str(cfg['lambda']) + "_" + datetime.now().strftime("%m%d%y_%H%M%S")
     sim = Simulator(env, automaton, cfg['lambda'], reward_type=cfg['reward_type'])
-    with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True)) as run:
+    with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True), name=run_name) as run:
         # run_Q_STL(cfg, run, sim)
         # copt = ConstrainedOptimization(cfg, run, sim)
         if 'continuous' not in cfg['classes']:

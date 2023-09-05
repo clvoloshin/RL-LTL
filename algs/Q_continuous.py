@@ -39,6 +39,7 @@ class Q_learning:
         self.update_target_network()
         self.num_cycles = num_cycles
         self.buffer = Buffer(envsize, self.num_cycles, param['replay_buffer_size'])
+        self.good_buffer = Buffer(envsize, self.num_cycles, param['replay_buffer_size'])
         self.temp = param['q_learning']['init_temp']
         
         self.n_batches = param['q_learning']['batches_per_update']
@@ -61,7 +62,6 @@ class Q_learning:
                 state_tensor = torch.tensor(state['mdp']).float().to(device)
                 buchi = state['buchi']
                 action, is_eps = self.Q.act(state_tensor, buchi)
-
             return action, is_eps
         else:
             with torch.no_grad():
@@ -71,6 +71,8 @@ class Q_learning:
             return action, is_eps
 
     def collect(self, s, b, a, r, lr, cr, s_, b_):
+        if lr > 0:
+            self.good_buffer.add(s, b, a, r, lr, cr, s_, b_)
         self.buffer.add(s, b, a, r, lr, cr, s_, b_)
     
     def decay_temp(self, decay_rate, min_temp, decay_type):
@@ -88,6 +90,25 @@ class Q_learning:
         self.temp = round(self.temp, 4)
         print(f'Setting temperature: {self.temp}')
     
+    # def sample_from_both_buffers(self, batch_size):
+    #     # first, sample (at most) half the data from the good buffer
+    #     s, b, a, r, lr, cr, s_, b_ = self.good_buffer.sample(int(batch_size / 2))
+    #     if len(s) < int(self.batch_size / 2):
+    #         # if the good buffer doesn't have enough data, sample the rest from the bad buffer
+    #         remaining_size = batch_size - len(s)
+    #     else:
+    #         remaining_size = int(batch_size / 2)
+    #     s2, b2, a2, r2, lr2, cr2, s_2, b_2 = self.buffer.sample(remaining_size)
+    #     s = np.concatenate((s, s2))
+    #     b = np.concatenate((b, b2))
+    #     a = np.concatenate((a, a2))
+    #     r = np.concatenate((r, r2))
+    #     lr = np.concatenate((lr, lr2))
+    #     cr = np.concatenate((cr, cr2))
+    #     s_ = np.concatenate((s_, s_2))
+    #     b_ = np.concatenate((b_, b_2))
+    #     return s, b, a, r, lr, cr, s_, b_
+    
     def update(self):
         for _ in range(self.n_batches):
             self.iterations_since_last_target_update += 1
@@ -103,6 +124,8 @@ class Q_learning:
                 a = torch.tensor(a).to(device)
                 best_cycle_idx = torch.argmax(cr.sum(dim=0)).item()
                 crewards = cr[:, best_cycle_idx]
+                # if sum(crewards) > 0:
+                #     import pdb; pdb.set_trace()
                 targets = crewards + self.gamma * self.Q_target(s_, b_).amax(1)
 
             q_values = self.Q(s, b, False).gather(1, a.unsqueeze(1))
@@ -111,18 +134,22 @@ class Q_learning:
             loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.to_tensor(0).unsqueeze(1).clone().detach())
             
-            # if self.ltl_lambda != 0:
-            #     normalized_val_loss = loss / (self.ltl_lambda / (1 - self.gamma))
-            # else:
-            #     normalized_val_loss = loss
+            if self.ltl_lambda != 0:
+                normalized_val_loss = loss / (self.ltl_lambda / (1 - self.gamma))
+            else:
+                normalized_val_loss = loss
 
             # loss = (td_error**2).mean() # MSE
 
             # backward optimize
             self.optimizer.zero_grad()
-            loss.backward()
+            normalized_val_loss.backward()
             self.optimizer.step()
 
+            
+            # if loss.item() < 5:
+            #     import pdb; pdb.set_trace()
+            
             if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
                 self.update_target_network()
                 self.iterations_since_last_target_update = 0
@@ -156,8 +183,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             if not is_eps:
                 for buchi_state in range(env.observation_space['buchi'].n):
                     next_buchi_state, is_accepting = env.next_buchi(next_state['mdp'], buchi_state)
-                    constrained_reward, _, rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
-                    agent.collect(state['mdp'], buchi_state, action, mdp_reward, rew_info["ltl_reward"], constrained_reward, next_state['mdp'], next_buchi_state)
+                    new_const_rew, _, new_rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
+                    agent.collect(state['mdp'], buchi_state, action, mdp_reward, new_rew_info["ltl_reward"], new_const_rew, next_state['mdp'], next_buchi_state)
                     if buchi_state == state['buchi']:
                         agent.buffer.mark()
                 
@@ -165,8 +192,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
                     try:                        
                         for eps_idx in range(env.action_space[buchi_state].n):
                             next_buchi_state, is_accepting = env.next_buchi(state['mdp'], buchi_state, eps_idx)
-                            constrained_reward, _, rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
-                            agent.collect(state['mdp'], buchi_state, action, mdp_reward, rew_info["ltl_reward"], constrained_reward, next_state['mdp'], next_buchi_state)
+                            new_const_rew, _, new_rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
+                            agent.collect(state['mdp'], buchi_state, action, mdp_reward, new_rew_info["ltl_reward"], new_const_rew, next_state['mdp'], next_buchi_state)
                     except:
                         pass
 
@@ -182,6 +209,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         if done:
             break
         state = next_state
+        states.append(state['mdp'])
+        buchis.append(state['buchi'])
     if visualize:
         save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
         img = env.render(states=states, save_dir=save_dir)
@@ -191,9 +220,12 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         elif save_dir is not None:  # if we're in an environment that can't generate an image as in-python array
             # load image from save dir
         # frames = 
-        # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
             if testing: 
                 runner.log({"testing": wandb.Image(save_dir + "/trajectory.png")})
+    # if ltl_ep_reward > 0:
+    #     import pdb; pdb.set_trace()
+    # if testing:
+    #     import pdb; pdb.set_trace()
     return mdp_ep_reward, ltl_ep_reward, t
         
 def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None):
@@ -206,13 +238,14 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
             current_loss = agent.update()
         
-        if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0:
+        if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0 and i_episode != 0:
             agent.decay_temp(param['q_learning']['temp_decay_rate'], param['q_learning']['min_action_temp'], param['q_learning']['temp_decay_type'])
         
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
                 mdp_test_reward, ltl_test_reward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir)
+            #import pdb; pdb.set_trace()
             test_data = np.array(test_data)
     
         if i_episode % 1 == 0:

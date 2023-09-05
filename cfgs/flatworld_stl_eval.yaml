@@ -27,8 +27,8 @@ ppo:
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
   n_traj: 3000
-  var_denominator: 1
-  alpha: 0.5
+  var_denominator: 5
+  alpha: 0.2
   T: 50
 q_learning:
   batches_per_update: 5
@@ -45,16 +45,16 @@ q_learning:
   n_traj: 10000
   T: 50
 testing:
-  testing_freq__n_episodes: 25
+  testing_freq__n_episodes: 1
   num_rollouts: 1
-gamma: .98
+gamma: .97
 n_grad_updates: 1
 delta: .1
 n_seeds: 10
 init_seed: 212
 replay_buffer_size: 10000
 checkpoint_freq__n_episodes: 50
-lambda: 700.0
+lambda: 350.0
 visualize: True
 reward_type: 2
 load_path: 0  # 0 if not pre-loading a model, otherwise a string path to the model.

@@ -17,9 +17,9 @@ q_learning:
   batch_size: 128
   update_freq__n_episodes: 1
   temp_decay_freq__n_episodes: 25
-  temp_decay_rate: .05
-  min_action_temp: 0.
-  n_traj: 1000
+  temp_decay_rate: .9
+  min_action_temp: 0.01
+  n_traj: 500
   T: 100
   init_temp: .3
   lr: .001
@@ -32,9 +32,12 @@ gamma: .99
 n_grad_updates: 1
 delta: .1
 n_seeds: 10
-init_seed: 623
-lambda: 60.0
+init_seed: 314
+lambda: 500.0
 replay_buffer_size: 50000
 checkpoint_freq__n_episodes: 50
 visualize: True
-reward_type: 2
+reward_type: 1
+load_path: 0  # 0 if not pre-loading a model, otherwise a string path to the model.
+model_name: "minecraft_norew"
+run_name: "minecraft_trial"
