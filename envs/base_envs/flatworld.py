@@ -47,8 +47,8 @@ class FlatWorld(gym.Env):
         ).astype(np.float32)
         high = np.array(
             [
-                2,
-                2
+                1,
+                1
             ]
         ).astype(np.float32)
 
@@ -84,11 +84,13 @@ class FlatWorld(gym.Env):
         # self.obs_6 = np.array([-2.7/2, 2.7/2, 0.35]) # reward region: 
         self.timestep = 0  # set time to keep count of STL values
         
-        self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
-        #self.circles = [(self.obs_2, 'y'), (self.obs_3, 'b')]
-        self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3}
+        #self.circles = [(self.obs_1, 'r'), (self.obs_2, 'g'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        self.circles = [(self.obs_1, 'r'), (self.obs_4, 'y'), (self.obs_3, 'b')]
+        #self.circles_map = {'r': self.obs_1, 'g': self.obs_2, 'y': self.obs_4, 'b': self.obs_3}
+        self.circles_map = {'r': self.obs_1, 'y': self.obs_4, 'b': self.obs_3}
         # generate reward regions randomly
         self.generate_random_rewards()
+        #self.generate_gridded_rewards()
         self.rho_alphabet = list(self.circles_map.keys())
 
         self.state = np.array([-1, -1])
@@ -96,9 +98,16 @@ class FlatWorld(gym.Env):
         self.fig, self.ax = plt.subplots(1, 1)
     
     def generate_random_rewards(self):
-        reward_regions = np.random.uniform(-2, 2, size=(30, 2))  # TODO: set this to be something different, if needed
+        reward_regions = np.random.uniform(-2, 1, size=(30, 2))  # TODO: set this to be something different, if needed
         for region in reward_regions:
             self.circles.append((np.array([region[0], region[1], .1]), 'm'))
+    
+    def generate_gridded_rewards(self):
+        x = np.linspace(-2, 1, 7)
+        y = np.linspace(-2, 1, 7)
+        xv, yv = np.meshgrid(x, y)
+        for pt in zip(xv.flatten(), yv.flatten()):
+            self.circles.append((np.array([pt[0], pt[1], .07]), 'm'))
     
     def compute_rho(self):
         # return a map from string to value for each robustness fxn
@@ -252,8 +261,8 @@ class FlatWorld(gym.Env):
 
         # self.ax.scatter([self.goal[0]], [self.goal[1]], s=20, marker='*', c="orange")
         self.ax.axis('square')
-        self.ax.set_xlim([-2, 2])
-        self.ax.set_ylim([-2, 2])
+        self.ax.set_xlim([-2, 1])
+        self.ax.set_ylim([-2, 1])
 
         # if save_dir is not None:
         #     self.fig.savefig(save_dir)

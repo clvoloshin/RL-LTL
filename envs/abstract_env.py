@@ -91,6 +91,7 @@ class Simulator(gym.Env):
         self.num_cycles = len(self.all_accepting_cycles)
         if self.reward_type != 2: ## IF we have a fixed reward:
             self.num_cycles = 1 # only reward one thing
+            self.acc_cycle_edge_counts = [1.]
         #import pdb; pdb.set_trace()
             
     def unnormalize(self, states):
@@ -127,21 +128,21 @@ class Simulator(gym.Env):
         # one_hot = np.zeros(self.automaton.n_states)
         # one_hot[automaton_state] = 1.
         # return np.hstack([state, one_hot]), {}
+    def decay_lambda(self, decay_rate, min_lambda, decay_type):
     
-    # @timeit
-    # def simulate(self, state, action):
-
-    #     env_state, aut_state = state
-    #     self.mdp.set_state(env_state)
-    #     self.automaton.set_state(aut_state)
-    #     output = self.step(action)
+        if decay_type == 'linear':
+            self.lambda_val = self.lambda_val - decay_rate
+        elif decay_type == 'exponential':
+            self.lambda_val = self.lambda_val * decay_rate
+        else:
+            raise NotImplemented
         
-    #     new_output = ((output[0], self.mdp.get_state(), self.automaton.get_state()), output[1], output[2], output[3])
+        if (self.lambda_val <= min_lambda):
+            self.lambda_val = min_lambda
         
-    #     self.mdp.set_state(env_state)
-    #     self.automaton.set_state(aut_state)
-        
-    #     return new_output
+        self.lambda_val = round(self.lambda_val, 4)
+        return self.lambda_val
+        #print(f'Setting temperature: {self.temp}')
 
     def next_buchi(self, mdp_state, desired_current_aut_state, eps_action=None):
         if eps_action is None:
@@ -185,12 +186,8 @@ class Simulator(gym.Env):
     def ltl_reward_1(self, terminal, b, b_):
         # print(f"b_ shape: {b_.shape}")
         # print(f"accepting states: {self.accepting_states}")
-        if isinstance(b_, torch.TensorType): 
-            b_device = b_.device
-            return b_.cpu().apply_(lambda x: x in self.automaton.automaton.accepting_states).float().to(b_device), terminal
-        else:
-            reward, terminal = self.ltl_reward_1_scalar(terminal, b, b_)
-            return np.array([reward]), terminal
+        reward, terminal = self.ltl_reward_1_scalar(terminal, b, b_)
+        return np.array([reward]), terminal
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
     def ltl_reward_2(self, terminal, b, b_):
@@ -198,12 +195,16 @@ class Simulator(gym.Env):
 
             #return -1, True
         for buchi_cycle in self.all_accepting_cycles:
+            # if b_ == (self.automaton.automaton.n_states - 1): # terminal state
+            #     cycle_rewards.append(-1.0)
             if b in buchi_cycle:
-                if b_ == buchi_cycle[b].child.id:
+                if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
+                    cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
+                elif b_ == buchi_cycle[b].child.id:
                     cycle_rewards.append(1.0)
                 else:
                     cycle_rewards.append(0.0)
-            else: # epsilon transition
+            else: # epsilon transition or non-cycle transition
                 cycle_rewards.append(0.0)
         if terminal: #took sink
                 return np.array(cycle_rewards), True
@@ -273,10 +274,7 @@ class Simulator(gym.Env):
             done = False
             info = self.mdp.get_info()
             info.update({'edge': edge})
-            # dic = {'state' : self.mdp.index_to_state(self.mdp.get_state())}
-            # info = {'mdp_state': state, 'aut_state': automaton_state}
-            # next_state = self.states.setdefault((state, automaton_state), len(self.states))
-            # self.map.setdefault(self.states[(state, automaton_state)], (state, automaton_state))
+
         else:
             output = self.mdp.step(action)
             try:

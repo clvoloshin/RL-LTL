@@ -208,7 +208,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     buchis.append(state['buchi'])
     mdp_ep_reward = 0
     ltl_ep_reward = 0
-    disc_ep_reward = 0
+    constr_ep_reward = 0
     if not testing: 
         agent.buffer.restart_traj()
     # if testing & visualize:
@@ -274,7 +274,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # agent.buffer.atomics.append(info['signal'])
         mdp_ep_reward += rew_info["mdp_reward"]
         ltl_ep_reward += rew_info["ltl_reward"]
-        disc_ep_reward += param['gamma']**(t-1) * mdp_reward # TODO: change this to represent combined reward
+        visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
+        constr_ep_reward += param['gamma']**(t-1) * (env.lambda_val * (visit_buchi) + mdp_reward)
 
         states.append(next_state['mdp'])
         buchis.append(next_state['buchi'])
@@ -305,7 +306,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # except:
     #     pass
     #print(action)
-    return mdp_ep_reward, ltl_ep_reward, max(constrained_reward), t
+    return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, t
         
 def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False, visualize=True, save_dir=None):
     
@@ -339,48 +340,47 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     fixed_state, _ = env.reset()
     #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
     best_creward = 0
+    mdp_rewards = []
+    avg_buchi_visits = []
     for i_episode in tqdm(range(param['ppo']['n_traj'])):
         # TRAINING
 
         # Get trajectory
         # tic = time.time()
-        mdp_ep_reward, ltl_ep_reward, creward, t = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
-
         # update weights
         # tic = time.time()
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
-            losstuple = agent.update()
-            if losstuple is not None:
-                current_loss, loss_info = losstuple
+            if not param['eval']:
+                losstuple = agent.update()
+                if losstuple is not None:
+                    current_loss, loss_info = losstuple
         # toc2 = time.time() - tic
         # print(toc, toc2)
-        
+        if param['eval']:
+            mdp_rewards.append(mdp_ep_reward)
+            avg_buchi_visits.append(bvisits)
         if i_episode % param['ppo']['temp_decay_freq__n_episodes'] == 0:
             agent.decay_temp(param['ppo']['temp_decay_rate'], param['ppo']['min_action_temp'], param['ppo']['temp_decay_type'])
+            
+        # if i_episode % param['lambda_decay_freq__n_episodes'] == 0:
+        #     new_lambda = env.decay_lambda(param['lambda_decay_rate'], param['min_lambda'], param['lambda_decay_type'])
+        #     # set the new lambda val for the agent
+        #     agent.ltl_lambda = new_lambda
         
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             test_data = []
             for test_iter in range(param['testing']['num_rollouts']):
-                mdp_test_reward, ltl_test_reward, creward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
-                if creward > best_creward:
-                    best_creward = creward
+                mdp_test_reward, ltl_test_reward, test_creward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+                if test_creward > best_creward:
+                    best_creward = test_creward
                     agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
             test_data = np.array(test_data)
     
         if i_episode > 1 and i_episode % 1 == 0:
             runner.log({#'Iteration': i_episode,
-                    #  'last_reward': last_reward,
-                    #  'Method': method,
-                    #  'Success': success_history[-1],
-                    #  'Last20Success': np.mean(np.array(success_history[-20:])),
-                    #  'DiscSuccess': disc_success_history[-1],
-                    #  'Last20DiscSuccess': np.mean(np.array(disc_success_history[-20:])),
-                    #  'EpisodeReward': ep_reward,
-                    #  'DiscEpisodeReward': disc_ep_reward,
-                    # 'EpisodeRhos': stl_val,
-                    # 'ExpectedQVal': max_q_val,
                     'R_LTL': ltl_ep_reward,
                     'R_MDP': mdp_ep_reward,
                     'LossVal': current_loss,
@@ -392,7 +392,9 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
                      'ActionTemp': agent.temp,
                      'EntropyLoss': loss_info["entropy_loss"],
                      "Test_R_LTL": ltl_test_reward,
-                     "Test_R_MDP": mdp_test_reward
+                     "Test_R_MDP": mdp_test_reward,
+                     "Lambda_Val": agent.ltl_lambda,
+                     "Dual Reward": creward,
                      })
             
             # avg_timesteps = t #np.mean(timesteps)
@@ -401,18 +403,8 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
             # success_history += [test_data[:, 0].mean()]
             # disc_success_history += [test_data[:, 1].mean()]
             method = "PPO"
-            #plot_something_live(axes, [np.arange(len(history)),  np.arange(len(success_history))], [history, success_history], method)
-            # logger.logkv('Iteration', i_episode)
-            # logger.logkv('Method', method)
-            # logger.logkv('Success', success_history[-1])
-            # logger.logkv('Last20Success', np.mean(np.array(success_history[-20:])))
-            # logger.logkv('DiscSuccess', disc_success_history[-1])
-            # logger.logkv('Last20DiscSuccess', np.mean(np.array(disc_success_history[-20:])))
-            # logger.logkv('EpisodeReward', ep_reward)
-            # logger.logkv('DiscEpisodeReward', disc_ep_reward)
-            # logger.logkv('TimestepsAlive', avg_timesteps)
-            # logger.logkv('PercTimeAlive', (avg_timesteps+1)/param['ppo']['T'])
-            # logger.logkv('ActionTemp', agent.temp)
-            # logger.dumpkvs()
-            
+    if param['eval']:
+        print("Average Buchi Visits and Average MDP Rewards at Eval Time:")
+        print(sum(avg_buchi_visits) / len(avg_buchi_visits))
+        print(sum(mdp_rewards) / len(mdp_rewards))
     plt.close()
