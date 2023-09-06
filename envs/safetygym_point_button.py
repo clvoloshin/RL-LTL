@@ -15,11 +15,12 @@ class SafetyGymWrapper:
     def reset(self):
         return self.original_env.reset()
 
-    def label(self, state):
+    def label(self, data):
+        # ! Pass the env.data to label instead of the state for safety gym envs
         # Why do we need signal here?
         signal, labels = {}, {}
         # reach the button
-        for contact in self.original_env.data.contact[:self.data.ncon]:
+        for contact in data.contact[:data.ncon]:
             geom_ids = [contact.geom1, contact.geom2]
             geom_names = sorted([self.original_env.model.geom_id2name(g) for g in geom_ids])
             for idx in range(self.original_env.buttons_num):
