@@ -6,7 +6,7 @@ logger:
   dir_name: safety_gym
 ltl:
   autobuild: False
-  formula: "GF(wp_0 & XF(wp_1)) & G!crash" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
+  formula: "G(F(button_0 & X(F(button_1))))" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
