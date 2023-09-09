@@ -198,9 +198,9 @@ class Simulator(gym.Env):
             # if b_ == (self.automaton.automaton.n_states - 1): # terminal state
             #     cycle_rewards.append(-1.0)
             if b in buchi_cycle:
-                if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
-                    cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
-                elif b_ == buchi_cycle[b].child.id:
+                # if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
+                #     cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
+                if b_ == buchi_cycle[b].child.id:
                     cycle_rewards.append(1.0)
                 else:
                     cycle_rewards.append(0.0)
@@ -249,12 +249,14 @@ class Simulator(gym.Env):
                             ):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
-        if self.reward_type == 1:
-            ltl_reward, done = self.ltl_reward_1(terminal, b, b_) #TODO: manually set this for now
+        if self.reward_type == 2:
+            ltl_reward, done = self.ltl_reward_2(terminal, b, b_)
         else:
-            ltl_reward, done = self.ltl_reward_2(terminal, b, b_) #TODO: manually set this for now
+            ltl_reward, done = self.ltl_reward_1(terminal, b, b_) 
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
-        return mdp_reward + (self.lambda_val * ltl_reward) / self.acc_cycle_edge_counts, done, {"ltl_reward": max(ltl_reward), "mdp_reward": mdp_reward}
+        if self.reward_type == 3:
+            return (self.lambda_val * ltl_reward), done, {"ltl_reward": max(ltl_reward), "mdp_reward": mdp_reward}
+        return mdp_reward + (self.lambda_val * ltl_reward), done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
     
     # @timeit
     def step(self, action, is_eps=False):

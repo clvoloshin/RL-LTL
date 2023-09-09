@@ -46,6 +46,7 @@ class PPO:
         self.temp = param['ppo']['action_std']
         self.alpha = param['ppo']['alpha']
         self.ltl_lambda = param['lambda']
+        self.original_lambda = param['lambda']
 
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
         if model_path:
@@ -87,10 +88,6 @@ class PPO:
                     return action_mean, action_idx, is_eps, action_logprob, all_logprobs
             return action, action_idx, is_eps, action_logprob, all_logprobs
         
-    def collect(self, s, b, a, r, s_, b_):
-        # TODO: update this part
-        self.buffer.add(s, b, a, r, s_, b_)
-        
     def save_model(self, save_path):
         torch.save(self.policy.state_dict(), save_path)
     
@@ -124,7 +121,7 @@ class PPO:
             
             # TODO: update the RolloutBuffer to return rhos, edge, terminal
             old_states, old_buchis, old_actions, old_next_buchis, rewards, \
-                lrewards, crewards, old_action_idxs, old_logprobs, old_edges, old_terminals \
+                lrewards, orig_crewards, old_action_idxs, old_logprobs, old_edges, old_terminals \
                     = self.buffer.get_torch_data(
                         self.gamma, self.batch_size
                     )
@@ -149,8 +146,10 @@ class PPO:
             
             
             # take the cycle rewards, and find the cycle that maximizes the summed reward
-            best_cycle_idx = torch.argmax(crewards.sum(dim=0)).item()
-            crewards = crewards[:, best_cycle_idx]
+            best_cycle_idx = torch.argmax(lrewards.sum(dim=0)).item()
+            crewards = orig_crewards[:, best_cycle_idx]
+            #new_crewards = torch.where(crewards > 0, self.ltl_lambda, crewards)
+            #import pdb; pdb.set_trace()
             # if best_cycle_idx == 2:
             #     import pdb; pdb.set_trace()
 
@@ -174,6 +173,7 @@ class PPO:
             #     # No signal available
             #     loss = 0.5*val_loss #- 0.01*entropy_loss 
             # else:
+            # normalized_val_loss = val_loss
             if self.ltl_lambda != 0:
                 normalized_val_loss = val_loss / (self.ltl_lambda / (1 - self.gamma))
             else:
@@ -209,6 +209,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     mdp_ep_reward = 0
     ltl_ep_reward = 0
     constr_ep_reward = 0
+    total_buchi_visits = 0
     if not testing: 
         agent.buffer.restart_traj()
     # if testing & visualize:
@@ -251,6 +252,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             # print(action)
             # print(agent.Q(s, b))
         # tic = time.time()
+        visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
+    
         agent.buffer.add_experience(
             env, 
             state['mdp'], 
@@ -266,6 +269,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             all_logprobs,
             edge,
             terminal,
+            visit_buchi
             )
         # total_experience_time += time.time() - tic
 
@@ -273,10 +277,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         #     env.render()
         # agent.buffer.atomics.append(info['signal'])
         mdp_ep_reward += rew_info["mdp_reward"]
-        ltl_ep_reward += rew_info["ltl_reward"]
-        visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
-        constr_ep_reward += param['gamma']**(t-1) * (env.lambda_val * (visit_buchi) + mdp_reward)
-
+        ltl_ep_reward += max(rew_info["ltl_reward"])
+        constr_ep_reward += param['gamma']**(t-1) * (agent.original_lambda * (visit_buchi) + mdp_reward)
+        total_buchi_visits += visit_buchi
         states.append(next_state['mdp'])
         buchis.append(next_state['buchi'])
         if done:
@@ -306,9 +309,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # except:
     #     pass
     #print(action)
-    return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, t
+    return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits
         
-def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinate=False, visualize=True, save_dir=None):
+def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=True, save_dir=None, save_model=False):
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
@@ -324,7 +327,6 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     # constrained_rew_fxn = {2: [env.automaton.edges(2, 3)[0]], 3: [env.automaton.edges(3, 1)[0]], 1: [env.automaton.edges(1, 0)[0]], 0: [env.automaton.edges(0, 0)[0]]}  
     # constrained_rew_fxn = {0: [env.automaton.edges(0, 0)[0]]}
 
-    stl_tree = parse_stl_into_tree(param['ltl']['formula'])
     agent = PPO(
         env.observation_space, 
         env.action_space, 
@@ -340,8 +342,8 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
     fixed_state, _ = env.reset()
     #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
     best_creward = 0
-    mdp_rewards = []
-    avg_buchi_visits = []
+    all_crewards = []
+    test_creward = 0
     for i_episode in tqdm(range(param['ppo']['n_traj'])):
         # TRAINING
 
@@ -353,31 +355,24 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
         # update weights
         # tic = time.time()
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
-            if not param['eval']:
-                losstuple = agent.update()
-                if losstuple is not None:
-                    current_loss, loss_info = losstuple
+            losstuple = agent.update()
+            if losstuple is not None:
+                current_loss, loss_info = losstuple
         # toc2 = time.time() - tic
         # print(toc, toc2)
-        if param['eval']:
-            mdp_rewards.append(mdp_ep_reward)
-            avg_buchi_visits.append(bvisits)
         if i_episode % param['ppo']['temp_decay_freq__n_episodes'] == 0:
             agent.decay_temp(param['ppo']['temp_decay_rate'], param['ppo']['min_action_temp'], param['ppo']['temp_decay_type'])
             
-        # if i_episode % param['lambda_decay_freq__n_episodes'] == 0:
-        #     new_lambda = env.decay_lambda(param['lambda_decay_rate'], param['min_lambda'], param['lambda_decay_type'])
-        #     # set the new lambda val for the agent
-        #     agent.ltl_lambda = new_lambda
-        
+        if i_episode % param['lambda_decay_freq__n_episodes'] == 0 and i_episode > 0:
+            new_lambda = env.decay_lambda(param['lambda_decay_rate'], param['min_lambda'], param['lambda_decay_type'])
+            # set the new lambda val for the agent
+            agent.ltl_lambda = new_lambda
+        all_crewards.append(creward)
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
-            test_data = []
-            for test_iter in range(param['testing']['num_rollouts']):
-                mdp_test_reward, ltl_test_reward, test_creward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
-                if test_creward > best_creward:
-                    best_creward = test_creward
-                    agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
-            test_data = np.array(test_data)
+            mdp_test_reward, ltl_test_reward, test_creward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+            if test_creward > best_creward and save_model:
+                best_creward = test_creward
+                agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
     
         if i_episode > 1 and i_episode % 1 == 0:
             runner.log({#'Iteration': i_episode,
@@ -394,7 +389,7 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
                      "Test_R_LTL": ltl_test_reward,
                      "Test_R_MDP": mdp_test_reward,
                      "Lambda_Val": agent.ltl_lambda,
-                     "Dual Reward": creward,
+                     "Dual Reward": test_creward,
                      })
             
             # avg_timesteps = t #np.mean(timesteps)
@@ -403,8 +398,27 @@ def run_ppo_continuous_2(param, runner, env, second_order = False, to_hallucinat
             # success_history += [test_data[:, 0].mean()]
             # disc_success_history += [test_data[:, 1].mean()]
             method = "PPO"
-    if param['eval']:
-        print("Average Buchi Visits and Average MDP Rewards at Eval Time:")
-        print(sum(avg_buchi_visits) / len(avg_buchi_visits))
-        print(sum(mdp_rewards) / len(mdp_rewards))
     plt.close()
+    return agent, all_crewards
+
+def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
+    fixed_state, _ = env.reset()
+    #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
+    crewards = []
+    mdp_rewards = []
+    avg_buchi_visits = []
+    print("Beginning evaluation.")
+    for i_episode in tqdm(range(param["num_eval_trajs"])):
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize)
+        mdp_rewards.append(mdp_ep_reward)
+        avg_buchi_visits.append(bvisits)
+        crewards.append(creward)
+    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
+    print("Buchi Visits and MDP Rewards for fixed (test) policy at Eval Time:")
+    print("Buchi Visits:", test_bvisits)
+    print("MDP Reward:", mdp_test_reward)
+    print("")
+    print("Average Buchi Visits and Average MDP Rewards for stochastic policy at Eval Time:")
+    print("Buchi Visits:", sum(avg_buchi_visits) / len(avg_buchi_visits))
+    print("MDP Reward:", sum(mdp_rewards) / len(mdp_rewards))
+    return sum(avg_buchi_visits) / len(avg_buchi_visits), sum(mdp_rewards) / len(mdp_rewards), sum(crewards) / len(crewards)
