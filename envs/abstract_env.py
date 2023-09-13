@@ -115,8 +115,14 @@ class Simulator(gym.Env):
         except:
             pass
 
-        state, _ = self.mdp.reset()
-        label, _ = self.mdp.label(state)
+        wrapped_state, _ = self.mdp.reset()
+        if isinstance(wrapped_state, dict):
+            state = wrapped_state['state']
+            label_state = wrapped_state['data']
+            label, _ = self.mdp.label(label_state)
+        else:
+            state = wrapped_state
+            label, _ = self.mdp.label(state)
         
         self.automaton.reset()
         if make_aut_init_state_random:
@@ -145,6 +151,7 @@ class Simulator(gym.Env):
         #print(f'Setting temperature: {self.temp}')
 
     def next_buchi(self, mdp_state, desired_current_aut_state, eps_action=None):
+        # The mdp_state is for getting the label.
         if eps_action is None:
             current_aut_state = self.automaton.get_state()
             label, _ = self.mdp.label(mdp_state)
@@ -265,7 +272,12 @@ class Simulator(gym.Env):
         if is_eps: 
             #epsilon transition
             state = self.mdp.get_state()
-            label, _ = self.mdp.label(state)
+            if isinstance(state, dict):
+                label_state = state['data']
+                state = state['state']
+                label, _ = self.mdp.label(label_state)
+            else:
+                label, _ = self.mdp.label(state)
             if self.mdp.continuous_actions == False:
                 automaton_state, edge = self.automaton.epsilon_step(action - self.mdp.action_space.n) # discrete
             else:
@@ -283,7 +295,12 @@ class Simulator(gym.Env):
                 state, cost, done, _, info = output 
             except:
                 state, cost, done, info = output
-            label, _ = self.mdp.label(state)
+            if isinstance(state, dict):
+                label_state = state['data']
+                state = state['state']
+                label, _ = self.mdp.label(label_state)
+            else:
+                label, _ = self.mdp.label(state)
             automaton_state, edge = self.automaton.step(label)
         
 
