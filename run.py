@@ -29,7 +29,7 @@ def main(cfg):
     results_path = save_dir + '/results_dict.pkl'
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
-    if cfg["baseline"] == "all" or cfg.run_full:
+    if cfg["baseline"] == "all":
         baseline_types = ["ours", "pretrain_only", "cycler_only", "baseline"]
     else:
         baseline_types = [cfg["baseline"]]
@@ -37,8 +37,8 @@ def main(cfg):
         reward_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, bline)
         results_dict[bline + "_crewards"] = reward_sequence
         results_dict[bline + "_buchi"], results_dict[bline + "_mdp"], results_dict[bline + "_cr"] = eval_results[0], eval_results[1], eval_results[2]
-    with open(results_path, 'wb') as f:
-        pkl.dump(results_dict, f)
+        with open(results_path, 'wb') as f:
+            pkl.dump(results_dict, f)
     print(cfg)
 
 def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):

@@ -378,10 +378,10 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
         if i_episode % param['ppo']['temp_decay_freq__n_episodes'] == 0:
             agent.decay_temp(param['ppo']['temp_decay_rate'], param['ppo']['min_action_temp'], param['ppo']['temp_decay_type'])
             
-        if i_episode % param['lambda_decay_freq__n_episodes'] == 0 and i_episode > 0:
-            new_lambda = env.decay_lambda(param['lambda_decay_rate'], param['min_lambda'], param['lambda_decay_type'])
+        # if i_episode % param['lambda_decay_freq__n_episodes'] == 0 and i_episode > 0:
+        #     new_lambda = env.decay_lambda(param['lambda_decay_rate'], param['min_lambda'], param['lambda_decay_type'])
             # set the new lambda val for the agent
-            agent.ltl_lambda = new_lambda
+            # agent.ltl_lambda = new_lambda
         all_crewards.append(creward)
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             mdp_test_reward, ltl_test_reward, test_creward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
