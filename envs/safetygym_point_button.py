@@ -11,9 +11,18 @@ class SafetyGymWrapper:
     def __init__(self):
         self.original_env = gym.make('Safexp-PointButton-v0')
         self.original_env.task = 'goal' # reward is for reaching the goal
+        self.observe_buttons = True # observe the button positions
+        # self.constrain_button = True
     
     def reset(self):
-        return self.original_env.reset()
+        state = self.original_env.reset()
+        return self.state_wrapper(state)
+    
+    def state_wrapper(self, state):
+        return {
+            'state': state,
+            'data': self.data,
+        }
 
     def label(self, data):
         # ! Pass the env.data to label instead of the state for safety gym envs
@@ -32,7 +41,11 @@ class SafetyGymWrapper:
         self.original_env.render(states, save_dir, save_states)
 
     def step(self, action):
-        return self.original_env.step(action)
+        next_state, reward, done, info = self.original_env.step(action)
+        return self.state_wrapper(next_state), reward, done, info
+    
+    def get_state(self):
+        return self.state_wrapper(self.obs(), self.data)
 
 
     
