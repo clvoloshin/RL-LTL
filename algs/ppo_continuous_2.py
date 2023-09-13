@@ -149,6 +149,8 @@ class PPO:
             best_cycle_idx = torch.argmax(lrewards.sum(dim=0)).item()
             crewards = orig_crewards[:, best_cycle_idx]
             #new_crewards = torch.where(crewards > 0, self.ltl_lambda, crewards)
+            # if torch.max(lrewards.sum(dim=0)).item() > 0:
+            #     import pdb; pdb.set_trace()
             #import pdb; pdb.set_trace()
             # if best_cycle_idx == 2:
             #     import pdb; pdb.set_trace()
@@ -201,7 +203,7 @@ class PPO:
         return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": normalized_val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 
-def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None):
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None, best_ltl_reward=0):
     states, buchis = [], []
     state, _ = env.reset()
     states.append(state['mdp'])
@@ -220,7 +222,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     
     # total_action_time = 0
     # total_experience_time = 0
-    
     for t in range(1, param['ppo']['T']):  # Don't infinite loop while learning
         # tic = time.time()
         action, action_idx, is_eps, log_prob, all_logprobs = agent.select_action(state, testing)
@@ -284,8 +285,15 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         buchis.append(next_state['buchi'])
         if done:
             break
+        # if terminal:
+        #     constr_ep_reward = mdp_ep_reward
+            # break
         state = next_state
-
+    if ltl_ep_reward >= best_ltl_reward: # or best_ltl_reward
+            #visualize these
+            visualize = True
+    if terminal:
+        constr_ep_reward = mdp_ep_reward
     if visualize:
         save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
         img = env.render(states=states, save_dir=save_dir)
@@ -311,7 +319,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     #print(action)
     return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits
         
-def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=True, save_dir=None, save_model=False):
+def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=True, save_dir=None, save_model=False, agent=None, n_traj=None):
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
@@ -326,14 +334,16 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
     ## F(r & XF(g & XF(y))) & G~b
     # constrained_rew_fxn = {2: [env.automaton.edges(2, 3)[0]], 3: [env.automaton.edges(3, 1)[0]], 1: [env.automaton.edges(1, 0)[0]], 0: [env.automaton.edges(0, 0)[0]]}  
     # constrained_rew_fxn = {0: [env.automaton.edges(0, 0)[0]]}
-
-    agent = PPO(
-        env.observation_space, 
-        env.action_space, 
-        param['gamma'], 
-        param, 
-        to_hallucinate,
-        model_path=param['load_path'])
+    if agent is None:
+        agent = PPO(
+            env.observation_space, 
+            env.action_space, 
+            param['gamma'], 
+            param, 
+            to_hallucinate,
+            model_path=param['load_path'])
+    else:
+        agent
     
     # fig, axes = plt.subplots(2, 1)
     # history = []
@@ -344,14 +354,19 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
     best_creward = 0
     all_crewards = []
     test_creward = 0
-    for i_episode in tqdm(range(param['ppo']['n_traj'])):
+    best_ltl_reward = 0
+    if n_traj is None:
+        n_traj = param['ppo']['n_traj'] + param['ppo']['n_pretrain_traj']
+    for i_episode in tqdm(range(n_traj)):
         # TRAINING
 
         # Get trajectory
         # tic = time.time()
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir, best_ltl_reward=best_ltl_reward)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
+        if ltl_ep_reward > best_ltl_reward:
+            best_ltl_reward = ltl_ep_reward
         # update weights
         # tic = time.time()
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
@@ -398,7 +413,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
             # success_history += [test_data[:, 0].mean()]
             # disc_success_history += [test_data[:, 1].mean()]
             method = "PPO"
-    plt.close()
+    #plt.close()
     return agent, all_crewards
 
 def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):

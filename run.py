@@ -10,8 +10,9 @@ from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_value_iter_2 import run_value_iter
 from algs.Q_continuous import run_Q_continuous
-from algs.ppo_continuous_2 import run_ppo_continuous_2
+from algs.ppo_continuous_2 import run_ppo_continuous_2, eval_agent
 from algs.sac_learning import run_sac
+import pickle as pkl
 ROOT = Path(__file__).parent
 
 @hydra.main(config_path=str(ROOT / "cfgs"))
@@ -23,21 +24,72 @@ def main(cfg):
     env = hydra.utils.instantiate(cfg.env)
     automaton = AutomatonRunner(Automaton(**cfg['ltl']))
     # make logging dir for wandb to pull from, if necessary
-    save_dir = os.path.join(os.getcwd(), 'experiments', cfg['logger']['dir_name'])
+    save_dir = os.path.join(os.getcwd(), 'experiments', cfg['run_name'] + "_" + cfg["baseline"])
+    results_dict = {}
+    results_path = save_dir + '/results_dict.pkl'
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
-    run_name = cfg['run_name'] + '_seed' + str(cfg['init_seed']) + '_lambda' + str(cfg['lambda']) + "_" + datetime.now().strftime("%m%d%y_%H%M%S")
-    sim = Simulator(env, automaton, cfg['lambda'], reward_type=cfg['reward_type'])
+    if cfg["baseline"] == "all" or cfg.run_full:
+        baseline_types = ["ours", "pretrain_only", "cycler_only", "baseline"]
+    else:
+        baseline_types = [cfg["baseline"]]
+    for bline in baseline_types:
+        reward_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, bline)
+        results_dict[bline + "_crewards"] = reward_sequence
+        results_dict[bline + "_buchi"], results_dict[bline + "_mdp"], results_dict[bline + "_cr"] = eval_results[0], eval_results[1], eval_results[2]
+    with open(results_path, 'wb') as f:
+        pkl.dump(results_dict, f)
+    print(cfg)
+
+def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
+    if baseline_type == "ours":
+        first_reward_type = 4
+        second_reward_type = 2
+        pretrain_trajs = cfg['ppo']['n_pretrain_traj']
+        train_trajs = cfg['ppo']['n_traj']
+    elif baseline_type == "pretrain_only":
+        first_reward_type = 3
+        second_reward_type = 1
+        pretrain_trajs = cfg['ppo']['n_pretrain_traj']
+        train_trajs = cfg['ppo']['n_traj']
+    elif baseline_type == "cycler_only":
+        first_reward_type = 2
+        second_reward_type = 2
+        pretrain_trajs = 0
+        train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+    elif baseline_type == "baseline":  # baseline method
+        first_reward_type = 1
+        second_reward_type = 1
+        pretrain_trajs = 0
+        train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+    else:
+        print("BASELINE TYPE NOT FOUND!")
+        import pdb; pdb.set_trace()
+    run_name = cfg['run_name'] + "_" + baseline_type + "_" + '_seed' + str(cfg['init_seed']) + '_lambda' + str(cfg['lambda']) + datetime.now().strftime("%m%d%y_%H%M%S")
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True), name=run_name) as run:
-        # run_Q_STL(cfg, run, sim)
-        # copt = ConstrainedOptimization(cfg, run, sim)
-        if 'continuous' not in cfg['classes']:
-            run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
+    # run_Q_STL(cfg, run, sim)
+    # copt = ConstrainedOptimization(cfg, run, sim)
+        total_crewards = []
+        if method != 'ppo':
+            import pdb; pdb.set_trace()
+            sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
+            agent, total_crewards = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
         else:
         #run_sac(cfg, run, sim)
-            run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"], save_dir=save_dir)
-        # run_value_iter(cfg, run, sim)
-    print(cfg)
+        #pretraining phase
+            cfg['reward_type'] = first_reward_type
+            sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
+            agent, pre_orig_crewards = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"],
+                                                            save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
+            total_crewards.extend(pre_orig_crewards)
+            cfg['reward_type'] = second_reward_type
+            sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
+            agent, full_orig_crewards = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"],
+                                                            save_dir=save_dir, save_model=True, agent=agent, n_traj=train_trajs)
+            total_crewards.extend(full_orig_crewards)
+        buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, run, sim, agent)
+        run.finish()
+    return total_crewards, (buchi_visits, mdp_reward, combined_rewards)
 
 if __name__ == "__main__":
     main()

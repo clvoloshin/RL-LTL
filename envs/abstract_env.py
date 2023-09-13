@@ -195,7 +195,7 @@ class Simulator(gym.Env):
 
             #return -1, True
         for buchi_cycle in self.all_accepting_cycles:
-            # if b_ == (self.automaton.automaton.n_states - 1): # terminal state
+            # if terminal: # terminal state
             #     cycle_rewards.append(-1.0)
             if b in buchi_cycle:
                 # if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
@@ -249,13 +249,13 @@ class Simulator(gym.Env):
                             ):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
-        if self.reward_type == 2:
+        if self.reward_type % 2 == 0:  # if it's reward type 2 or 4
             ltl_reward, done = self.ltl_reward_2(terminal, b, b_)
         else:
             ltl_reward, done = self.ltl_reward_1(terminal, b, b_) 
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
-        if self.reward_type == 3:
-            return (self.lambda_val * ltl_reward), done, {"ltl_reward": max(ltl_reward), "mdp_reward": mdp_reward}
+        if self.reward_type > 2:
+            return (self.lambda_val * ltl_reward), done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
         return mdp_reward + (self.lambda_val * ltl_reward), done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
     
     # @timeit
