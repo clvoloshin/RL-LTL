@@ -13,6 +13,9 @@ class SafetyGymWrapper:
         self.original_env.task = 'goal' # reward is for reaching the goal
         self.observe_buttons = True # observe the button positions
         # self.constrain_button = True
+
+        self.action_space = self.original_env.action_space
+        self.observation_space = self.original_env.observation_space
     
     def reset(self):
         state = self.original_env.reset()
@@ -21,10 +24,11 @@ class SafetyGymWrapper:
     def state_wrapper(self, state):
         return {
             'state': state,
-            'data': self.data,
+            'data': self.original_env.data,
         }
 
-    def label(self, data):
+    def label(self, state):
+        data = state['data']
         # ! Pass the env.data to label instead of the state for safety gym envs
         # Why do we need signal here?
         signal, labels = {}, {}
@@ -36,8 +40,10 @@ class SafetyGymWrapper:
                 if any(n == f'button{idx}' for n in geom_names):
                     if any(n in self.original_env.robot.geom_names for n in geom_names):
                         labels.update({f'button_{idx}': 1})
+        return labels, signal
 
     def render(self, states = [], save_dir=None, save_states=False):
+        states = [s['state'] for s in states]
         self.original_env.render(states, save_dir, save_states)
 
     def step(self, action):
