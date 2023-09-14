@@ -12,9 +12,9 @@ from moviepy.video.io.bindings import mplfig_to_npimage
 class CarloEnv:
     def __init__(self, continuous_actions=True):
         dt = 0.1 # time steps in terms of seconds. In other words, 1/dt is the FPS.
-        world_width = 170/2 # in meters
+        world_width = 160/2 # in meters
         world_height = 100/2
-        self.inner_building_radius = 20/2
+        self.inner_building_radius = 11/2
         # num_lanes = 2
         self.lane_marker_width = 0.75
         # num_of_lane_markers = 52/2
@@ -30,8 +30,8 @@ class CarloEnv:
         # A CircleBuilding or RingBuilding object is also static -- they do not move. But as opposed to Painting, they can be collided with.
         
         # To create a figure-eight road, we will add two CircleBuilding and then two RingBuildings around them
-        cb1 = CircleBuilding(Point(world_width* (3/10), world_height/2), self.inner_building_radius, 'gray80')
-        cb2 = CircleBuilding(Point(world_width* (7/10), world_height/2), self.inner_building_radius, 'gray80')
+        cb1 = CircleBuilding(Point(world_width* (1/3), world_height/2), self.inner_building_radius, 'gray80')
+        cb2 = CircleBuilding(Point(world_width* (2/3), world_height/2), self.inner_building_radius, 'gray80')
         self.cb1 = cb1
         self.cb2 = cb2
         w.add(cb1)
@@ -107,7 +107,7 @@ class CarloEnv:
         self.starting_region = np.random.choice(2)
         xs = np.linspace(np.pi/2, 2*np.pi+np.pi/2, 10)
         theta = np.random.choice(xs) % (np.pi*2)
-        lane_markers_radius = self.inner_building_radius + (0 + 1) * (self.lane_marker_width - 2) #+ (0 + 0.5) * self.lane_marker_width
+        lane_markers_radius = self.inner_building_radius + (0.7) * (self.lane_marker_width - 2) #+ (0 + 0.5) * self.lane_marker_width
         dx = lane_markers_radius * np.cos(theta)
         dy = lane_markers_radius * np.sin(theta)
         if self.starting_region == 0:

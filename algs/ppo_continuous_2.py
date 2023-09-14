@@ -289,9 +289,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         #     constr_ep_reward = mdp_ep_reward
             # break
         state = next_state
-    if ltl_ep_reward >= best_ltl_reward: # or best_ltl_reward
-            #visualize these
-            visualize = True
     if terminal:
         constr_ep_reward = mdp_ep_reward
     if visualize:
