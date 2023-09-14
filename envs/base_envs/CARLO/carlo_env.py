@@ -202,11 +202,11 @@ class CarloEnv:
         # return numpy_fig
     
     def between_circles_reward(self, relative_position):
-        if abs(self.agent.x - self.center[0]) > self.distance_between_circles:
+        if abs(self.agent.x - self.center[0]) > (self.distance_between_circles / 2):
             return 0
-        if abs(self.agent.y - self.center[1]) > self.distance_between_circles:
+        if abs(self.agent.y - self.center[1]) > (self.distance_between_circles / 2):
             return 0
-        return np.linalg.norm(relative_position - self.relative_center) * 15
+        return np.linalg.norm(relative_position - self.relative_center) * 3
     
     def step(self, action):
 
