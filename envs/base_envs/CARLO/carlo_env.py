@@ -45,7 +45,7 @@ class CarloEnv:
         w.add(leftrect)
         w.add(rightrect)
                 
-        self.distance_between_circles = cb1.center.x - cb2.center.x - 2 * self.inner_building_radius
+        self.distance_between_circles = abs(cb2.center.x - cb1.center.x) - 2 * self.inner_building_radius
 
         # Let's also add some lane markers on the ground as waypoints for the LTL specification
         self.waypoints = []
