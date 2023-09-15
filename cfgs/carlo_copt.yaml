@@ -23,8 +23,8 @@ ppo:
   lr_critic: 0.01       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
-  n_traj: 3000
-  n_pretrain_traj: 3000
+  n_traj: 2500
+  n_pretrain_traj: 2500
   alpha: 0.1  
   var_denominator: 1.0
   T: 200 
@@ -60,6 +60,6 @@ visualize: True
 reward_type: 2
 load_path: 0
 model_name: "carlo_figeight"
-run_name: "short_carlo_work"
+run_name: "reset_carlo_work"
 num_eval_trajs: 50
 baseline: "all"

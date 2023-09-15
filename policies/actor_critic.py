@@ -313,6 +313,7 @@ class ActorCritic(nn.Module):
         self.has_continuous_action_space = has_continuous_action_space        
         self.temp = action_std_init
         self.var_denominator = param['ppo']['var_denominator']
+        self.state_dim = state_dim
         if has_continuous_action_space:
             self.action_dim = action_dim['mdp'].shape[0]
             self.action_var = torch.full((self.action_dim,), action_std_init * action_std_init, requires_grad=True).to(device)
@@ -375,7 +376,14 @@ class ActorCritic(nn.Module):
                         nn.Tanh(),
                         nn.Linear(64, state_dim['buchi'].n)
                     )
-        
+    
+    def reset_entropy(self):
+        # reset it even if pre-loaded
+        self.log_std_head = nn.Sequential(
+                nn.Linear(64, self.state_dim['buchi'].n * self.action_dim),
+                nn.Tanh()
+            )
+    
     def set_action_std(self, new_action_std):
         if self.has_continuous_action_space:
             self.temp = new_action_std
