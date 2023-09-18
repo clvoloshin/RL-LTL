@@ -52,7 +52,7 @@ class Trajectory:
         self.rewards.append(r)  # want this to hold the original MDP reward
         self.ltl_rewards.append(lr)
         self.cycle_rewards.append(cr)
-        self.has_reward = self.has_reward or (accepts > 0)
+        self.has_reward = self.has_reward or accepts #(max(lr) > 0)  # important: should we only use accepts or ltl_reward?
         self.done = self.done #or (lr < 0)  # TODO: look into this for other envs?
         self.is_eps.append(is_eps)
         self.act_idxs.append(act_idx)
@@ -80,7 +80,7 @@ class Trajectory:
         
 
 class RolloutBuffer:
-    def __init__(self, state_shp, action_shp, max_ = 1000, to_hallucinate=False) -> None:
+    def __init__(self, state_shp, action_shp, lambda_val, max_ = 1000, to_hallucinate=False) -> None:
         self.states = torch.zeros((max_,) + state_shp)
         self.trajectories = []#torch.zeros()
         self.all_reward_trajectories = []
@@ -312,6 +312,7 @@ class ActorCritic(nn.Module):
 
         self.has_continuous_action_space = has_continuous_action_space        
         self.temp = action_std_init
+        self.min_temp = param['ppo']['min_action_temp']
         self.var_denominator = param['ppo']['var_denominator']
         self.state_dim = state_dim
         if has_continuous_action_space:
@@ -435,9 +436,11 @@ class ActorCritic(nn.Module):
 
             if act_or_eps == 0:
                 # else:
-                std = action_log_std.exp()
-                cov_mat = torch.diag_embed(std)
-                #cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
+                if self.temp > self.min_temp:  # don't use the learned entropy here.
+                    cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
+                else:
+                    std = action_log_std.exp()
+                    cov_mat = torch.diag_embed(std)
                 dist = MultivariateNormal(action_mean, cov_mat)
                 #samp_dist = Normal(action_mean, cov_mat)
                 action = dist.rsample()
@@ -505,9 +508,15 @@ class ActorCritic(nn.Module):
 
             action_var = self.action_var.expand_as(action_mean)
             action_std = action_log_std.exp()
-            cov_mat = torch.diag_embed(action_std).to(device)
+            if self.temp > self.min_temp:
+                cov_mat = torch.diag_embed(action_var).to(device)
+                dist = MultivariateNormal(action_mean, cov_mat)
+            else:
+                cov_mat = torch.diag_embed(action_std).to(device)
+                dist = MultivariateNormal(action_mean, cov_mat)
+            dist_gaussian = dist.entropy()#.mean()
             #cov_mat = torch.diag_embed(action_var).to(device)
-            dist = MultivariateNormal(action_mean, cov_mat)
+
             
             action_logprobs = dist.log_prob(action)
             try:
@@ -525,7 +534,7 @@ class ActorCritic(nn.Module):
 
             # Entropy. Overapprox, not exact. RECHECK
             dist_coinflip = dist_coinflip.entropy().squeeze()
-            dist_gaussian = dist.entropy()#.mean()
+            #dist_gaussian = dist.entropy()#.mean()
             dist_entropy = dist_coinflip + dist_gaussian * probs[:, 0]
             #dist_entropy = dist_gaussian  #TODO: fix this!
             #import pdb; pdb.set_trace()

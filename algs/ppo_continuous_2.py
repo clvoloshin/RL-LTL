@@ -12,6 +12,8 @@ from policies.actor_critic import RolloutBuffer, ActorCritic
 import time
 import wandb
 from tqdm import tqdm
+from PIL import Image
+
 
 ################################## set device ##################################
 # print("============================================================================================")
@@ -66,7 +68,8 @@ class PPO:
 
         self.buffer = RolloutBuffer(
             env_space['mdp'].shape, 
-            act_space['mdp'].shape, 
+            act_space['mdp'].shape,
+            self.ltl_lambda, 
             param['replay_buffer_size'], 
             to_hallucinate)
         
@@ -74,6 +77,10 @@ class PPO:
         self.num_updates_called = 0
         self.MseLoss = nn.MSELoss()
 
+    def reset_entropy(self):
+        self.policy.reset_entropy()
+        self.policy = self.policy.to(device)
+    
     def set_action_std(self, new_action_std):
         self.action_std = new_action_std
         self.policy.set_action_std(new_action_std)
@@ -204,7 +211,7 @@ class PPO:
         return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": normalized_val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 
-def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None, best_ltl_reward=0):
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None):
     states, buchis = [], []
     state, _ = env.reset()
     states.append(state['mdp'])
@@ -242,9 +249,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         edge = info['edge']
         terminal = info['is_rejecting']
         constrained_reward, _, rew_info = env.constrained_reward(terminal, state['buchi'], next_state['buchi'], mdp_reward)
-        if testing & visualize:
-            s = torch.tensor(next_state['mdp']).type(torch.float)
-            b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
+        # if testing & visualize:
+        #     s = torch.tensor(next_state['mdp']).type(torch.float)
+        #     b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
             #print(next_state['mdp'])
             #print(next_state['buchi'])
             # try:
@@ -290,20 +297,22 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         #     constr_ep_reward = mdp_ep_reward
             # break
         state = next_state
-    if terminal:
-        constr_ep_reward = mdp_ep_reward
+    # if terminal:
+    #     constr_ep_reward = mdp_ep_reward
     if visualize:
         save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
         img = env.render(states=states, save_dir=save_dir)
-        if img is not None:
-            if testing: 
-                runner.log({"testing": wandb.Image(img)})
-        elif save_dir is not None:  # if we're in an environment that can't generate an image as in-python array
-            # load image from save dir
-        # frames = 
-        # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
-            if testing: 
-                runner.log({"testing": wandb.Image(save_dir)})
+        # if img is not None:
+        #     if testing: 
+        #         runner.log({"testing": wandb.Image(img)})
+        # elif save_dir is not None:  # if we're in an environment that can't generate an image as in-python array
+        #     # load image from save dir
+        # # frames = 
+        # # runner.log({"video": wandb.Video([env.render(states=np.atleast_2d(state), save_dir=None) for state in states], fps=10)})
+        #     if testing: 
+        #         runner.log({"testing": wandb.Image(save_dir)})
+    else:
+        img = None
             # else:
             #     runner.log({"training": wandb.Image(env.render(states=states, save_dir=None))})
     # print('Get Experience', total_experience_time)
@@ -315,7 +324,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # except:
     #     pass
     #print(action)
-    return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits
+    return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img
         
 def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=True, save_dir=None, save_model=False, agent=None, n_traj=None):
     
@@ -340,8 +349,6 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
             param, 
             to_hallucinate,
             model_path=param['load_path'])
-    else:
-        agent
     
     # fig, axes = plt.subplots(2, 1)
     # history = []
@@ -352,7 +359,6 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
     best_creward = 0
     all_crewards = []
     test_creward = 0
-    best_ltl_reward = 0
     if n_traj is None:
         n_traj = param['ppo']['n_traj'] + param['ppo']['n_pretrain_traj']
     for i_episode in tqdm(range(n_traj)):
@@ -360,14 +366,13 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
 
         # Get trajectory
         # tic = time.time()
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir, best_ltl_reward=best_ltl_reward)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
-        if ltl_ep_reward > best_ltl_reward:
-            best_ltl_reward = ltl_ep_reward
         # update weights
         # tic = time.time()
-        if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
+        if i_episode % param['ppo']['update_freq__n_episodes'] == 0 or i_episode == 1:
+            # import pdb; pdb.set_trace()
             losstuple = agent.update()
             if losstuple is not None:
                 current_loss, loss_info = losstuple
@@ -382,28 +387,55 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
             # agent.ltl_lambda = new_lambda
         all_crewards.append(creward)
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
-            mdp_test_reward, ltl_test_reward, test_creward, t = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+            mdp_test_reward, ltl_test_reward, test_creward, bvisits, img = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
             if test_creward > best_creward and save_model:
                 best_creward = test_creward
                 agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
-    
-        if i_episode > 1 and i_episode % 1 == 0:
-            runner.log({#'Iteration': i_episode,
-                    'R_LTL': ltl_ep_reward,
-                    'R_MDP': mdp_ep_reward,
-                    'LossVal': current_loss,
-                    #'AvgTimesteps': t,
-                    "PolicyGradLoss": loss_info["policy_grad"],
-                    "MSEValLoss": loss_info["val_loss"],
-                    #  'TimestepsAlive': avg_timesteps,
-                    #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
-                     'ActionTemp': agent.temp,
-                     'EntropyLoss': loss_info["entropy_loss"],
-                     "Test_R_LTL": ltl_test_reward,
-                     "Test_R_MDP": mdp_test_reward,
-                     "Lambda_Val": agent.ltl_lambda,
-                     "Dual Reward": test_creward,
-                     })
+            testing = True
+        else:
+            testing = False
+        
+        if visualize and testing:
+            if i_episode >= 1 and i_episode % 1 == 0:
+                if img is None:
+                    to_log = save_dir + "/trajectory.png" if save_dir is not None else save_dir
+                else:
+                    to_log = img
+                runner.log({#'Iteration': i_episode,
+                        'R_LTL': ltl_test_reward,
+                        'R_MDP': mdp_test_reward,
+                        'LossVal': current_loss,
+                        #'AvgTimesteps': t,
+                        "PolicyGradLoss": loss_info["policy_grad"],
+                        "MSEValLoss": loss_info["val_loss"],
+                        #  'TimestepsAlive': avg_timesteps,
+                        #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
+                        'ActionTemp': agent.temp,
+                        'EntropyLoss': loss_info["entropy_loss"],
+                        "Test_R_LTL": ltl_test_reward,
+                        "Test_R_MDP": mdp_test_reward,
+                        "Lambda_Val": agent.ltl_lambda,
+                        "Dual Reward": test_creward,
+                        "testing": wandb.Image(to_log)
+                        })
+        else:
+            if i_episode >= 1 and i_episode % 1 == 0:
+                runner.log({#'Iteration': i_episode,
+                        'R_LTL': ltl_ep_reward,
+                        'R_MDP': mdp_ep_reward,
+                        'LossVal': current_loss,
+                        #'AvgTimesteps': t,
+                        "PolicyGradLoss": loss_info["policy_grad"],
+                        "MSEValLoss": loss_info["val_loss"],
+                        #  'TimestepsAlive': avg_timesteps,
+                        #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
+                        'ActionTemp': agent.temp,
+                        'EntropyLoss': loss_info["entropy_loss"],
+                        "Test_R_LTL": ltl_test_reward,
+                        "Test_R_MDP": mdp_test_reward,
+                        "Lambda_Val": agent.ltl_lambda,
+                        "Dual Reward": test_creward,
+                        })
             
             # avg_timesteps = t #np.mean(timesteps)
             #history += [disc_ep_reward]
@@ -415,6 +447,14 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
     return agent, all_crewards
 
 def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
+    if agent is None:
+        agent = PPO(
+        env.observation_space, 
+        env.action_space, 
+        param['gamma'], 
+        param, 
+        True,
+        model_path=param['load_path'])
     fixed_state, _ = env.reset()
     #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
     crewards = []
@@ -422,11 +462,15 @@ def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
     avg_buchi_visits = []
     print("Beginning evaluation.")
     for i_episode in tqdm(range(param["num_eval_trajs"])):
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize)
+        img_path = save_dir + "/eval_traj_{}.png".format(i_episode) if save_dir is not None else save_dir
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize)
         mdp_rewards.append(mdp_ep_reward)
         avg_buchi_visits.append(bvisits)
         crewards.append(creward)
-    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
+        im = Image.fromarray(img)
+        if img_path is not None:
+            im.save(img_path)
+    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
     print("Buchi Visits and MDP Rewards for fixed (test) policy at Eval Time:")
     print("Buchi Visits:", test_bvisits)
     print("MDP Reward:", mdp_test_reward)

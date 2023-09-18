@@ -98,9 +98,9 @@ class FlatWorld(gym.Env):
         self.fig, self.ax = plt.subplots(1, 1)
     
     def generate_random_rewards(self):
-        reward_regions = np.random.uniform(-2, 2, size=(30, 2))  # TODO: set this to be something different, if needed
+        reward_regions = np.random.uniform(-2, 2, size=(25, 2))  # TODO: set this to be something different, if needed
         for region in reward_regions:
-            self.circles.append((np.array([region[0], region[1], .1]), 'm'))
+            self.circles.append((np.array([region[0], region[1], .15]), 'm'))
     
     def generate_gridded_rewards(self):
         x = np.linspace(-2, 2, 7)

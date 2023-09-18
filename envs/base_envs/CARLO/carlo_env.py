@@ -47,6 +47,17 @@ class CarloEnv:
                 
         self.distance_between_circles = abs(cb2.center.x - cb1.center.x) - 2 * self.inner_building_radius
 
+        # let's add some potholes to make the road a little more interesting.
+        self.potholes = []
+        self.pothole_height_offset = 12.
+        self.pothole_width_offset = 0
+        self.pothole_height = 3.5
+        self.pothole_width = 3.5
+        self.potholes.append(Painting(Point(world_width/2 + self.pothole_width_offset, world_height/2 + self.pothole_height_offset), Point(self.pothole_width, self.pothole_height), 'orange'))
+        self.potholes.append(Painting(Point(world_width/2 - self.pothole_width_offset, world_height/2 - self.pothole_height_offset), Point(self.pothole_width, self.pothole_height), 'orange'))
+        for pothole in self.potholes:
+            pothole.collidable = False
+            w.add(pothole) 
         # Let's also add some lane markers on the ground as waypoints for the LTL specification
         self.waypoints = []
         # for lane_no in range(num_lanes - 1):
@@ -126,6 +137,14 @@ class CarloEnv:
         c1.velocity = Point(0.0, 0.0)
         self.agent = c1
         self.world.add(c1)
+        if self.world.collision_exists(): # set the car smack in the center
+            self.world.reset()
+            c1 = Car(Point(self.center[0], self.center[1]), theta + np.pi/2)
+            c1.max_speed = 30.0 # let's say the maximum is 30 m/s (108 km/h)
+            c1.min_speed = 3.0 # let's say the maximum is 30 m/s (108 km/h)
+            c1.velocity = Point(0.0, 0.0)
+            self.agent = c1
+            self.world.add(c1)
 
         self.state = self.get_state()
         return self.state, {}
@@ -167,6 +186,10 @@ class CarloEnv:
     def distance_to_waypoints(self, state):
         new_state = state * np.array([self.world_width, self.world_height, self.agent.max_speed, self.agent.max_speed, 2*np.pi]) 
         return np.array([np.linalg.norm([new_state[0] - wp.x, new_state[1] - wp.y]) for wp in self.waypoints])
+
+    def distance_to_potholes(self, state):
+        new_state = state * np.array([self.world_width, self.world_height, self.agent.max_speed, self.agent.max_speed, 2*np.pi]) 
+        return np.array([np.linalg.norm([new_state[0] - wp.x, new_state[1] - wp.y]) for wp in self.potholes])
 
     def render(self, states = [], save_dir=None, save_states=False):
         
@@ -236,9 +259,11 @@ class CarloEnv:
         relative_position = np.array([self.agent.x/self.world_width, self.agent.y/self.world_height])
         # Reward is higher if the agent is closer to the edges of the map.
         # circle_outer_reward = np.square(self.agent.x/self.world_width - center_x) + np.square(self.agent.y/self.world_height - center_y)
+        reward_normalizing_constant = 40
+        reward = (min(self.distance_to_potholes(self.state)) / reward_normalizing_constant) ** 2
         # Reward is higher if the agent is closer to the center of the map.
         # circle_inner_reward = np.square(min(abs(relative_position[0] - 1), relative_position[0])) + np.square(min(abs(relative_position[1] - 1), relative_position[1]))
-        reward = self.between_circles_reward(relative_position)
+        #reward = self.between_circles_reward(relative_position)
         #stay_centered_reward = (21.25 - np.linalg.norm(position - self.center)) / self.inner_building_radius  # negative penalty for distance from the center of the track
         terminated = self.world.collision_exists()
         self.state = self.get_state()

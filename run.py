@@ -83,13 +83,25 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
                                                             save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
             total_crewards.extend(pre_orig_crewards)
             cfg['reward_type'] = second_reward_type
+            if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
+                agent.reset_entropy()
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
             agent, full_orig_crewards = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"],
                                                             save_dir=save_dir, save_model=True, agent=agent, n_traj=train_trajs)
             total_crewards.extend(full_orig_crewards)
-        buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, run, sim, agent)
+        if baseline_type == "ours":
+            traj_dir = save_dir + '/trajectories'
+            if not os.path.exists(traj_dir):
+                os.mkdir(traj_dir)
+        else:
+            traj_dir = None
+        buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, run, sim, agent, save_dir=traj_dir)
         run.finish()
     return total_crewards, (buchi_visits, mdp_reward, combined_rewards)
+
+def eval_policy(cfg, env, automaton, save_dir):
+    sim = Simulator(env, automaton, cfg['lambda'], reward_type=1)
+    
 
 if __name__ == "__main__":
     main()
