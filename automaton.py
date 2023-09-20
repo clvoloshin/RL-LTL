@@ -23,6 +23,13 @@ import networkx as nx
 # from interfaces.automata import Label, LABEL_TRUE
 # from interfaces.expr import Signal
 
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    pset = []
+    s = list(iterable)
+    pset.extend(list(chain.from_iterable(combinations(s, r) for r in range(len(s)+1))))
+    return [set(x) for x in pset]
+
 class AdditionalConstraint(object):
     pass
 
@@ -95,11 +102,12 @@ def parse_bdd(bdd, d): #(bdd:buddy.bdd, d:spot.bdd_dict):
 
 
 class AutomatonEdge(object):
-    def __init__(self, parent, condition, condition_dict, child):
+    def __init__(self, parent, condition, condition_dict, child, acc_frontier):
         self.parent = parent
         self.condition = condition
         self.condition_dict = condition_dict
         self.child = child
+        self.acc_frontier = acc_frontier
 
         self.finite = set()
         self.infinite = set()
@@ -116,7 +124,7 @@ class AutomatonEdge(object):
             self.finite.add(i)
         
     def __repr__(self) -> str:
-        return "Edge(%s, %s, %s, %s, %s)" % (self.parent.id, self.condition, self.child.id, self.finite, self.infinite)
+        return "Edge(%s, %s, %s, %s, %s, %s)" % (self.parent.id, self.condition, self.child.id, self.acc_frontier, self.finite, self.infinite)
         # return "Edge(%s, %s, %s)" % (self.parent.id, self.condition, self.child.id)
     
     def truth(self, state):
@@ -124,14 +132,16 @@ class AutomatonEdge(object):
         
 
 class AutomatonState(object):
-    def __init__(self, id):
+    def __init__(self, id, accepting_variables={}):
         self.id = id
         self.edges = []
         self.parents = []
-
+        self.accepting_vars = {}
         self.finite = set()
         self.infinite = set()
-        
+    
+    def set_accepting_vars(self, accepting_vars):
+        self.accepting_vars = accepting_vars
     
     def set_accepting(self, i, fin_or_inf):
         if fin_or_inf:
@@ -152,7 +162,7 @@ class AutomatonState(object):
         # return "State(%s, %s, %s)" % (self.id, self.finite, self.infinite)
         return "State(%s)" % (self.id)
 
-class Automaton(object):
+class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
     def __init__(self, formula="True", oa_type='dra', rabinizer=None, autobuild=False) -> None:
         
         formula = formula.replace("~", "!")
@@ -165,7 +175,7 @@ class Automaton(object):
         if oa_type == 'dra':
             out=check_output([rabinizer, '-c', self.formula] , shell=platform=='win32', env=env)
         elif oa_type == 'ldba':
-            out=check_output([rabinizer, '-d', '-e', self.formula] , shell=platform=='win32', env=env)
+            out=check_output([rabinizer, '-e', self.formula] , shell=platform=='win32', env=env)
             out, n_eps = self.parse_ldba_hoa(out)
         
         filename = self.random_hoa_filename()
@@ -208,6 +218,7 @@ class Automaton(object):
         
         self.G = nx.DiGraph()
         self.parse(aut)
+        #import pdb; pdb.set_trace()
     
     def build_formula(self, formula, autobuild):
         if not autobuild:
@@ -368,62 +379,97 @@ class Automaton(object):
             filename = 'temp_%032x.hoa' % random.getrandbits(128)
         return filename
     
+    def state_to_index(self, buchi_state, frontier_state):
+        return buchi_state * len(self.all_frontier_states) + self.all_frontier_states.index(frontier_state)
+    
+    def index_to_state(self, index):
+        n_columns = self.num_frontier_states
+        return index // n_columns, self.all_frontier_states[index % n_columns]
+    
     def parse(self, atm:Union[spot.twa, spot.twa_graph], additional_conditions=[]):
 
         parser = LTLfParser()
-
+        #import pdb; pdb.set_trace()
         self.states = dict()  # type: Dict[int, Node]
         acceptance_type = atm.get_acceptance()
+        self.frontier_set = eval(atm.get_acceptance().inf_unit().as_string())
+        self.all_frontier_states = powerset(self.frontier_set)
         # disjuncts = acceptance_type.top_disjuncts()
         # acceptance_sets = np.array([[[x for x in disjunct.top_conjuncts()[0].fin_unit().sets()][0], [x for x in  disjunct.top_conjuncts()[1].inf_unit().sets()][0]] for disjunct in disjuncts])
-
+        self.num_buchi_states = atm.num_states()
+        self.num_frontier_states = len(self.all_frontier_states)
         self.aps = [x.ap_name() for x in atm.ap()]
         # queue = atm.num_states()  # type: Set[int]
         processed = set()                      # type: Set[int]
+        # add all the nodes in the grid-graph first.
         for state_num in range(atm.num_states()):
-            # state_num = queue.pop()
-            processed.add(state_num)
+            for frontier_idx1, frontier_state1 in enumerate(self.all_frontier_states): 
+                # state_num = queue.pop()
+                new_state_num = self.state_to_index(state_num, frontier_state1)
+                processed.add(new_state_num)
+                
 
-            src = self.states.setdefault(state_num, AutomatonState(state_num))
+                src = self.states.setdefault(new_state_num, AutomatonState(new_state_num, {}))
+                
+                if frontier_state1 == self.frontier_set:
+                    if new_state_num != (atm.num_states() * len(self.all_frontier_states) - 1):
+                        # in the special case, the last node is not accepting since it's terminal.
+                        self.accepting_states.add(src.id)
+                        src.set_accepting(0, 1)
+                    
+        # now, add the edges.
+        for state_num in range(atm.num_states()):
             for e in list(atm.out(state_num)):  # type: spot.twa_graph_edge_storage
                 # if e.dst not in processed:
                 #     queue.add(e.dst)
 
-                dst_node = self.states.setdefault(e.dst, AutomatonState(e.dst))
-                
                 # state-based
-                if e.acc.count() > 0: 
-                    # acc = [x for x in e.acc.sets()][0]
-                    # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
-                        # src.set_accepting(i, fin_or_inf)
-                    self.accepting_states.add(src.id)
-                    src.set_accepting(0, 1)
 
-                #trans based
                 
-                conditions = parse_bdd(e.cond, atm.get_dict())
+                for frontier_state1 in self.all_frontier_states:
+                    src_node_idx = self.state_to_index(state_num, frontier_state1)
+                    src_node = self.states[src_node_idx]
+                    if e.acc.count() > 0: 
+                        # acc = [x for x in e.acc.sets()][0]
+                        # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
+                            # src.set_accepting(i, fin_or_inf)
+                        acc_set = eval(e.acc.as_string())
+                        src_node.set_accepting_vars(acc_set)
+                    for frontier_state2 in self.all_frontier_states:
+                        # create a node for each frontier state
+                        
+                        dst_node_idx = self.state_to_index(e.dst, frontier_state2)
+                        dst_node = self.states[dst_node_idx]
+                        
 
-                for condition, condition_dict in conditions.items():
-                    edge = AutomatonEdge(src, parser(condition), condition_dict, dst_node)
 
-                    # # transition-based
-                    # if e.acc.count() > 0: 
-                    #     # acc = [x for x in e.acc.sets()][0]
-                    #     # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
-                    #     #     edge.set_accepting(i, fin_or_inf)
-                    #     # self.accepting_states.add(src)
-                    #     edge.set_accepting(0, 1)
+                        #trans based
+                        
+                        conditions = parse_bdd(e.cond, atm.get_dict())
 
-                    if all([x.satisfied(edge) for x in additional_conditions]):
-                        src.add_edge(edge)
-                        dst_node.add_parent(edge)
-                    else:
-                        print('Edge Deleted: ', edge)
-                    self.G.add_edge(src.id, dst_node.id, edge = edge, condition = condition)
-                    
+                        for condition, condition_dict in conditions.items():
+                            edge = AutomatonEdge(src_node, parser(condition), condition_dict, dst_node, frontier_state2)
+
+                            # # transition-based
+                            # if e.acc.count() > 0: 
+                            #     # acc = [x for x in e.acc.sets()][0]
+                            #     # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
+                            #     #     edge.set_accepting(i, fin_or_inf)
+                            #     # self.accepting_states.add(src)
+                            #     edge.set_accepting(0, 1)
+
+                            if all([x.satisfied(edge) for x in additional_conditions]):
+                                src_node.add_edge(edge)
+                                dst_node.add_parent(edge)
+                            else:
+                                print('Edge Deleted: ', edge)
+                            self.G.add_edge(src_node.id, dst_node.id, edge = edge, condition = condition, accepting_vars=frontier_state2)
+                        
 
         self.n_states = len(self.states)
-        self.start_state = atm.get_init_state_number()
+        init_b_state = atm.get_init_state_number()
+        self.start_state = self.state_to_index(init_b_state, set())
+        #import pdb; pdb.set_trace()
 
 class HashableDict(dict):
     def __hash__(self):
@@ -434,12 +480,20 @@ class AutomatonRunner(object):
         self.automaton = automaton
         self.n_states = self.automaton.n_states
         self.edges_visited = {} #set()
+        self.current_frontier_set = {}
         
         # for LCRL
         self.accepting_sets = self.automaton.accepting_states
         self.epsilon_transitions = self.automaton.eps
+        import pdb; pdb.set_trace()
+    
+    def is_rejecting(self, state):
+        b_state, f_state = self.automaton.index_to_state(state)
+        return b_state == self.automaton.num_buchi_states - 1
 
     def set_state(self, state):
+        b_state, f_state = self.automaton.index_to_state(state)
+        self.current_frontier_set = f_state
         assert (state >= 0) and (state <= self.n_states), 'Setting Automaton to invalid state'
         self.current_state = state
     
@@ -471,12 +525,13 @@ class AutomatonRunner(object):
     
     def reset(self):
         self.current_state = self.automaton.start_state
-        self.accepting_frontier_set = [list(self.accepting_sets.copy())]
+        self.current_frontier_set = {}
     
     def epsilon_step(self, action):
         try:
-            self.current_state = self.automaton.eps[self.current_state][action]
-            return self.current_state, -1
+            b_state, f_state = self.automaton.index_to_state(self.current_state)
+            new_b_state = self.automaton.eps[b_state][action]
+            return self.automaton.state_to_index(new_b_state, f_state), -1
         except:
             import pdb; pdb.set_trace()
             assert 'This epsilon step doesnt exist, (q,e) = (%s, %s)' % (self.current_state, action)
@@ -485,22 +540,29 @@ class AutomatonRunner(object):
     def step(self, state):
         if state is None: state = {}
         state.update({'internal_state': self.current_state})
+        if self.current_state in self.accepting_sets:  # we're in an accepting state!
+            self.current_frontier_set = {}
         dict_hash = hash(HashableDict(state))
         if dict_hash in self.edges_visited: 
             edge = self.edges_visited[dict_hash]
             assert edge.truth(state)
+            assert edge.acc_frontier == self.current_frontier_set.union(edge.child.accepting_vars)
             self.current_state = edge.child.id
+            self.current_frontier_set = edge.acc_frontier
             return self.current_state, edge
 
         for edge in self.edges():
             if edge.truth(state):
-                self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
-                self.current_state = edge.child.id
-                return self.current_state, edge
+                if edge.acc_frontier == self.current_frontier_set.union(edge.child.accepting_vars):
+                    self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
+                    self.current_state = edge.child.id
+                    self.current_frontier_set = edge.acc_frontier
+                    return self.current_state, edge
         
         # else: sink
         # self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
         self.current_state = self.n_states - 1
+        self.current_frontier_set = {}
         return self.current_state, None
 
     def edges(self, start=None, end=None):
@@ -511,28 +573,3 @@ class AutomatonRunner(object):
                 return [x for x in self.automaton.states[start].edges if x.child.id == end]
             else:
                 return self.automaton.states[start].edges
-    
-    def accepting_frontier_function(self, next_automaton_state):
-        # FOR LCRL
-        # for more details refer to the tool paper
-
-        # remove the sets that have intersection with next_automaton_state
-        indices_to_remove = []
-        for i in range(len(self.accepting_frontier_set)):
-            if next_automaton_state in self.accepting_frontier_set[i]:
-                indices_to_remove.append(i)
-        self.accepting_frontier_set = \
-            np.delete(self.accepting_frontier_set, indices_to_remove, axis=0).tolist()
-
-        if indices_to_remove and not self.accepting_frontier_set:
-            self.accepting_frontier_set = [list(self.accepting_sets.copy())]
-            
-            # self.accepting_frontier_set = \
-            #     np.delete(self.accepting_frontier_set, indices_to_remove, axis=0).tolist()
-
-        # return a positive flag if a set has been removed from the accepting frontier set
-        if indices_to_remove:
-            return 1
-        # return zero otherwise
-        else:
-            return 0

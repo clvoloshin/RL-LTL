@@ -43,7 +43,7 @@ def main(cfg):
 
 def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
     if baseline_type == "ours":
-        first_reward_type = 4
+        first_reward_type = 2
         second_reward_type = 2
         pretrain_trajs = cfg['ppo']['n_pretrain_traj']
         train_trajs = cfg['ppo']['n_traj']
@@ -84,6 +84,8 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
             total_crewards.extend(pre_orig_crewards)
             cfg['reward_type'] = second_reward_type
             if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
+                agent.reset_entropy()
+            if baseline_type == "ours":
                 agent.reset_entropy()
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
             agent, full_orig_crewards = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"],

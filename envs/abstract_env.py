@@ -82,6 +82,7 @@ class Simulator(gym.Env):
         self.lambda_val = lambda_val
         self.reward_type = reward_type
         all_accepting_cycles = []
+        import pdb; pdb.set_trace()
         for state in self.automaton.automaton.accepting_states:
             cycles = self.find_min_accepting_cycles(state)
             all_accepting_cycles.extend(cycles)
@@ -89,10 +90,10 @@ class Simulator(gym.Env):
         self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
         self.fixed_cycle = None
         self.num_cycles = len(self.all_accepting_cycles)
-        if self.reward_type != 2: ## IF we have a fixed reward:
+        if self.reward_type % 2 != 0: ## IF we have a fixed reward:
             self.num_cycles = 1 # only reward one thing
             self.acc_cycle_edge_counts = [1.]
-        #import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()
             
     def unnormalize(self, states):
         try:
@@ -161,7 +162,7 @@ class Simulator(gym.Env):
             # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
             if (automaton_state in self.automaton.automaton.accepting_states):
                 accepting_rejecting_neutral = 1
-            elif automaton_state == (self.automaton.automaton.n_states - 1):
+            elif self.automaton.is_rejecting(automaton_state):
                 accepting_rejecting_neutral = -1
             else:
                 accepting_rejecting_neutral = 0
@@ -176,7 +177,7 @@ class Simulator(gym.Env):
             # if (automaton_state in self.automaton.automaton.accepting_states) or (automaton_state != current_aut_state):
             if (automaton_state in self.automaton.automaton.accepting_states):
                 accepting_rejecting_neutral = 1
-            elif automaton_state == (self.automaton.automaton.n_states - 1):
+            elif self.automaton.is_rejecting(automaton_state):
                 accepting_rejecting_neutral = -1
             else:
                 accepting_rejecting_neutral = 0
@@ -304,7 +305,7 @@ class Simulator(gym.Env):
             automaton_state, edge = self.automaton.step(label)
         
 
-        new_info = {'edge': edge, 'prev_mdp_state': current_mdp_state, 'prev_aut_state': current_aut_state , 's_': state, 'aut_state': automaton_state, 'label': label, 'is_accepting': automaton_state in self.automaton.automaton.accepting_states, 'is_rejecting': automaton_state == (self.automaton.automaton.n_states - 1)}
+        new_info = {'edge': edge, 'prev_mdp_state': current_mdp_state, 'prev_aut_state': current_aut_state , 's_': state, 'aut_state': automaton_state, 'label': label, 'is_accepting': automaton_state in self.automaton.automaton.accepting_states, 'is_rejecting': self.automaton.is_rejecting(automaton_state)}
         try:
             new_info.update(info)
         except:
@@ -341,13 +342,16 @@ class Simulator(gym.Env):
         # run a dfs
         def dfs(vertex, path):
             visited.add(vertex)
+            #import pdb; pdb.set_trace()
             self.automaton.set_state(vertex)
             for edge in self.automaton.edges():
+                #check if it's a valid edge
                 neighbor = edge.child.id
                 if neighbor == start_state:
                     path[vertex] = edge
                     if path not in cycles:
-                        #import pdb; pdb.set_trace()
+                        import pdb; pdb.set_trace()
+                        print('Found cycle {}'.format(len(cycles)))
                         cycles.append(deepcopy(path))
                 else:
                     if neighbor not in visited:
