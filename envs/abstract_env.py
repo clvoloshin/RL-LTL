@@ -82,7 +82,8 @@ class Simulator(gym.Env):
         self.lambda_val = lambda_val
         self.reward_type = reward_type
         all_accepting_cycles = []
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
+        print("finding cycles...")
         for state in self.automaton.automaton.accepting_states:
             cycles = self.find_min_accepting_cycles(state)
             all_accepting_cycles.extend(cycles)
@@ -90,6 +91,7 @@ class Simulator(gym.Env):
         self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
         self.fixed_cycle = None
         self.num_cycles = len(self.all_accepting_cycles)
+        print("Found {} cycles".format(self.num_cycles))
         if self.reward_type % 2 != 0: ## IF we have a fixed reward:
             self.num_cycles = 1 # only reward one thing
             self.acc_cycle_edge_counts = [1.]
@@ -350,8 +352,8 @@ class Simulator(gym.Env):
                 if neighbor == start_state:
                     path[vertex] = edge
                     if path not in cycles:
-                        import pdb; pdb.set_trace()
-                        print('Found cycle {}'.format(len(cycles)))
+                        # import pdb; pdb.set_trace()
+                        # print('Found cycle {}'.format(len(cycles)))
                         cycles.append(deepcopy(path))
                 else:
                     if neighbor not in visited:

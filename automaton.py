@@ -136,7 +136,7 @@ class AutomatonState(object):
         self.id = id
         self.edges = []
         self.parents = []
-        self.accepting_vars = {}
+        self.accepting_vars = set()
         self.finite = set()
         self.infinite = set()
     
@@ -400,9 +400,14 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
         self.num_frontier_states = len(self.all_frontier_states)
         self.aps = [x.ap_name() for x in atm.ap()]
         # queue = atm.num_states()  # type: Set[int]
+        self.buchi_state_to_accept_vars = {}
         processed = set()                      # type: Set[int]
         # add all the nodes in the grid-graph first.
         for state_num in range(atm.num_states()):
+            accepting_set = eval(atm.state_acc_sets(state_num).as_string())
+            if len(accepting_set) == 0:
+                accepting_set = set()
+            self.buchi_state_to_accept_vars[state_num] = accepting_set
             for frontier_idx1, frontier_state1 in enumerate(self.all_frontier_states): 
                 # state_num = queue.pop()
                 new_state_num = self.state_to_index(state_num, frontier_state1)
@@ -410,7 +415,10 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
                 
 
                 src = self.states.setdefault(new_state_num, AutomatonState(new_state_num, {}))
-                
+                src.set_accepting_vars(accepting_set)
+                if len(src.accepting_vars) == 0 and len(frontier_state1) == 0:
+                    if state_num != atm.num_states() - 1: 
+                        init_b_state = state_num
                 if frontier_state1 == self.frontier_set:
                     if new_state_num != (atm.num_states() * len(self.all_frontier_states) - 1):
                         # in the special case, the last node is not accepting since it's terminal.
@@ -422,33 +430,61 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
             for e in list(atm.out(state_num)):  # type: spot.twa_graph_edge_storage
                 # if e.dst not in processed:
                 #     queue.add(e.dst)
-
+                dst_accept_vars = self.buchi_state_to_accept_vars[e.dst]
                 # state-based
-
                 
+                # # first, go through and set the accepting variables.
+                # for frontier_state in self.all_frontier_states:
+                #     src_node_idx = self.state_to_index(state_num, frontier_state1)
+                #     src_node = self.states[src_node_idx]
+                #     if e.acc.count() > 0: 
+                #         # acc = [x for x in e.acc.sets()][0]
+                #         # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
+                #             # src.set_accepting(i, fin_or_inf)
+                #         acc_set = eval(e.acc.as_string())
+                #         src_node.set_accepting_vars(acc_set)
+                #     else:
+                #         if state_num != atm.num_states() - 1:  # ignore the terminal state
+                #             init_b_state = state_num          
                 for frontier_state1 in self.all_frontier_states:
-                    src_node_idx = self.state_to_index(state_num, frontier_state1)
-                    src_node = self.states[src_node_idx]
-                    if e.acc.count() > 0: 
-                        # acc = [x for x in e.acc.sets()][0]
-                        # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
-                            # src.set_accepting(i, fin_or_inf)
-                        acc_set = eval(e.acc.as_string())
-                        src_node.set_accepting_vars(acc_set)
-                    for frontier_state2 in self.all_frontier_states:
-                        # create a node for each frontier state
-                        
-                        dst_node_idx = self.state_to_index(e.dst, frontier_state2)
-                        dst_node = self.states[dst_node_idx]
-                        
+                    src_node = self.states[self.state_to_index(state_num, frontier_state1)]
+                    if not src_node.accepting_vars.issubset(frontier_state1):
+                        continue # unreachable node with mismatched frontier state to accepting vars at that node
+                    if frontier_state1 == self.frontier_set: # accepting node! reset here.
+                        dest_frontier = dst_accept_vars
+                    else:
+                        dest_frontier = frontier_state1.union(dst_accept_vars)
+                    destination_node_idx = self.state_to_index(e.dst, dest_frontier)
+                    dst_node = self.states[destination_node_idx]
 
-
-                        #trans based
+                    # for frontier_state2 in self.all_frontier_states:
+                    #     # create a node for each frontier state
                         
-                        conditions = parse_bdd(e.cond, atm.get_dict())
+                    #     dst_node_idx = self.state_to_index(e.dst, frontier_state2)
+                    #     dst_node = self.states[dst_node_idx]
 
-                        for condition, condition_dict in conditions.items():
-                            edge = AutomatonEdge(src_node, parser(condition), condition_dict, dst_node, frontier_state2)
+                    #     #trans based
+                        
+                    conditions = parse_bdd(e.cond, atm.get_dict())
+
+                    for condition, condition_dict in conditions.items():
+                        # if src_node.id == 3 and dst_node.id == 9:
+                        #     import pdb; pdb.set_trace()
+                        # if not dst_node.accepting_vars.issubset(frontier_state2):
+                        #     continue # we can't transition to buchi states that are unreachable
+                        
+                        # if src_node.id not in self.accepting_states: # you can only progress forward
+                        #     if not src_node.accepting_vars.issubset(frontier_state2): # if we're not we can only progress forward.
+                        #         continue
+                        # else:
+                        #     # if it is in the accepting states, only draw edges to the appropriate states
+                        #     if frontier_state2 != dst_node.accepting_vars:
+                        #         continue
+                        
+                        # if e.src == e.dst:
+                        #     if len(frontier_state2.difference(frontier_state1)) > 0: # can't magically gain variables from self looping?
+                        #         continue
+                        edge = AutomatonEdge(src_node, parser(condition), condition_dict, dst_node, dest_frontier)
 
                             # # transition-based
                             # if e.acc.count() > 0: 
@@ -458,16 +494,16 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
                             #     # self.accepting_states.add(src)
                             #     edge.set_accepting(0, 1)
 
-                            if all([x.satisfied(edge) for x in additional_conditions]):
-                                src_node.add_edge(edge)
-                                dst_node.add_parent(edge)
-                            else:
-                                print('Edge Deleted: ', edge)
-                            self.G.add_edge(src_node.id, dst_node.id, edge = edge, condition = condition, accepting_vars=frontier_state2)
+                        if all([x.satisfied(edge) for x in additional_conditions]):
+                            src_node.add_edge(edge)
+                            dst_node.add_parent(edge)
+                        else:
+                            print('Edge Deleted: ', edge)
+                        self.G.add_edge(src_node.id, dst_node.id, edge = edge, condition = condition, accepting_vars=dest_frontier)
                         
 
         self.n_states = len(self.states)
-        init_b_state = atm.get_init_state_number()
+        # init_b_state = atm.get_init_state_number()
         self.start_state = self.state_to_index(init_b_state, set())
         #import pdb; pdb.set_trace()
 
@@ -492,8 +528,8 @@ class AutomatonRunner(object):
         return b_state == self.automaton.num_buchi_states - 1
 
     def set_state(self, state):
-        b_state, f_state = self.automaton.index_to_state(state)
-        self.current_frontier_set = f_state
+        # b_state, f_state = self.automaton.index_to_state(state)
+        # self.current_frontier_set = f_state
         assert (state >= 0) and (state <= self.n_states), 'Setting Automaton to invalid state'
         self.current_state = state
     
@@ -525,7 +561,7 @@ class AutomatonRunner(object):
     
     def reset(self):
         self.current_state = self.automaton.start_state
-        self.current_frontier_set = {}
+        # self.current_frontier_set = {}
     
     def epsilon_step(self, action):
         try:
@@ -540,29 +576,29 @@ class AutomatonRunner(object):
     def step(self, state):
         if state is None: state = {}
         state.update({'internal_state': self.current_state})
-        if self.current_state in self.accepting_sets:  # we're in an accepting state!
-            self.current_frontier_set = {}
+        # if self.current_state in self.accepting_sets:  # we're in an accepting state!
+        #     self.current_frontier_set = {}
         dict_hash = hash(HashableDict(state))
         if dict_hash in self.edges_visited: 
             edge = self.edges_visited[dict_hash]
             assert edge.truth(state)
-            assert edge.acc_frontier == self.current_frontier_set.union(edge.child.accepting_vars)
+            # assert edge.acc_frontier == self.current_frontier_set.union(edge.child.accepting_vars)
             self.current_state = edge.child.id
-            self.current_frontier_set = edge.acc_frontier
+            # self.current_frontier_set = edge.acc_frontier
             return self.current_state, edge
 
         for edge in self.edges():
             if edge.truth(state):
-                if edge.acc_frontier == self.current_frontier_set.union(edge.child.accepting_vars):
-                    self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
-                    self.current_state = edge.child.id
-                    self.current_frontier_set = edge.acc_frontier
-                    return self.current_state, edge
+                # if edge.acc_frontier == self.current_frontier_set.union(edge.child.accepting_vars):
+                self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
+                self.current_state = edge.child.id
+                # self.current_frontier_set = edge.acc_frontier
+                return self.current_state, edge
         
         # else: sink
         # self.edges_visited[dict_hash] = edge #self.edges_visited.add(edge)
         self.current_state = self.n_states - 1
-        self.current_frontier_set = {}
+        # self.current_frontier_set = {}
         return self.current_state, None
 
     def edges(self, start=None, end=None):
