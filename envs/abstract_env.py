@@ -98,14 +98,7 @@ class Simulator(gym.Env):
         import pdb; pdb.set_trace()
     
     def get_rewarding_edge_counts(self):
-        cyc_counts = []
-        for cyc in self.all_accepting_cycles:
-            cyc_count = 0
-            for edge in cyc.values():
-                if edge.give_reward:
-                    cyc_count += 1.0
-            cyc_counts.append(cyc_count)
-        return cyc_counts
+        return [len(cyc) for cyc in self.all_accepting_cycles]
             
     def unnormalize(self, states):
         try:
@@ -221,10 +214,9 @@ class Simulator(gym.Env):
                 # if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
                 #     cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
                 if b_ == buchi_cycle[b].child.id:
-                    if buchi_cycle[b].give_reward:
-                        cycle_rewards.append(1.0)
-                    else:
-                        cycle_rewards.append(0.0)
+                    cycle_rewards.append(1.0)
+                    # else:
+                    #     cycle_rewards.append(0.0)
                 else:
                     cycle_rewards.append(0.0)
             else: # epsilon transition or non-cycle transition
@@ -362,13 +354,13 @@ class Simulator(gym.Env):
             for edge in self.automaton.edges():
                 #check if it's a valid edge
                 neighbor = edge.child.id
-                if edge.child.accepting_vars.issubset(edge.parent.accepting_vars):
-                    edge.give_reward = False
-                else:
-                    edge.give_reward = True
+                # if edge.child.accepting_vars.issubset(edge.parent.accepting_vars):
+                #     edge.give_reward = False
+                # else:
+                #     edge.give_reward = True
                 if neighbor == start_state:
                     path[vertex] = edge
-                    edge.give_reward = True  # always reward visiting the accept state
+                    # edge.give_reward = True  # always reward visiting the accept state
                     if path not in cycles:
                         # import pdb; pdb.set_trace()
                         print('Found cycle {}'.format(path))
