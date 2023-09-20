@@ -9,7 +9,7 @@ logger:
   dir_name: flatworld_stl
 ltl:
   autobuild: False
-  formula: "G(F(g) & F(y))"  #"G(F(y & X(F(r)))) & G~b" 
+  formula: "G(F(r & X(F(g) & X(F(y))))) & G~b"  #"G(F(y & X(F(r)))) & G~b" 
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
@@ -51,10 +51,10 @@ gamma: .98
 n_grad_updates: 1
 delta: .1
 n_seeds: 10
-init_seed: 624
+init_seed: 623
 replay_buffer_size: 10000
 checkpoint_freq__n_episodes: 50
-lambda: 100.0
+lambda: 400.0
 lambda_decay_freq__n_episodes: 1000
 lambda_decay_rate: 1.0
 lambda_decay_type: 'exponential'

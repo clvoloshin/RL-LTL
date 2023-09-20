@@ -296,8 +296,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         buchis.append(next_state['buchi'])
         if done:
             break
-        if terminal:
-            break
+        # if terminal:
+        #     break
             #constr_ep_reward = mdp_ep_reward
         state = next_state
     # if terminal:
