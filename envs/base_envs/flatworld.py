@@ -150,14 +150,15 @@ class FlatWorld(gym.Env):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
-        # randomly initialize the state
-        random_x = np.random.uniform(0.8, 2.0)
-        random_y = np.random.uniform(0.8, 2.0)
-        random_x_side = np.random.choice([-1, 1])
-        random_y_side = np.random.choice([-1, 1])
-        self.state = np.array([random_x * random_x_side, random_y * random_y_side])
+        # # randomly initialize the state
+        # random_x = np.random.uniform(0.8, 2.0)
+        # random_y = np.random.uniform(0.8, 2.0)
+        # random_x_side = np.random.choice([-1, 1])
+        # random_y_side = np.random.choice([-1, 1])
+        # self.state = np.array([random_x * random_x_side, random_y * random_y_side])
         # self.init_states =  [np.array([-1, -1]), np.array([-1, 1]), np.array([1, -1]), np.array([1, 1])]
         # self.state = self.init_states[np.random.choice(len(self.init_states))]
+        self.state = np.array([-1, -1])
         # reset the collected STL rho values
 
         self.timestep = 0

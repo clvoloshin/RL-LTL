@@ -45,6 +45,7 @@ class PPO:
         self.eps_clip = param['ppo']['eps_clip']
         self.has_continuous_action_space = True
         action_std_init = param['ppo']['action_std']
+        self.original_temp = param['ppo']['action_std']
         self.temp = param['ppo']['action_std']
         self.alpha = param['ppo']['alpha']
         self.ltl_lambda = param['lambda']
@@ -78,6 +79,8 @@ class PPO:
         self.MseLoss = nn.MSELoss()
 
     def reset_entropy(self):
+        self.temp = self.original_temp
+        self.policy.set_action_std(self.original_temp)
         self.policy.reset_entropy()
         self.policy = self.policy.to(device)
     
@@ -293,9 +296,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         buchis.append(next_state['buchi'])
         if done:
             break
-        # if terminal:
-        #     constr_ep_reward = mdp_ep_reward
-            # break
+        if terminal:
+            break
+            #constr_ep_reward = mdp_ep_reward
         state = next_state
     # if terminal:
     #     constr_ep_reward = mdp_ep_reward

@@ -88,7 +88,7 @@ class Simulator(gym.Env):
             cycles = self.find_min_accepting_cycles(state)
             all_accepting_cycles.extend(cycles)
         self.all_accepting_cycles = all_accepting_cycles
-        self.acc_cycle_edge_counts = np.array([len(cyc) * 1.0 for cyc in self.all_accepting_cycles])
+        self.acc_cycle_edge_counts = self.get_rewarding_edge_counts()
         self.fixed_cycle = None
         self.num_cycles = len(self.all_accepting_cycles)
         print("Found {} cycles".format(self.num_cycles))
@@ -96,6 +96,16 @@ class Simulator(gym.Env):
             self.num_cycles = 1 # only reward one thing
             self.acc_cycle_edge_counts = [1.]
         import pdb; pdb.set_trace()
+    
+    def get_rewarding_edge_counts(self):
+        cyc_counts = []
+        for cyc in self.all_accepting_cycles:
+            cyc_count = 0
+            for edge in cyc.values():
+                if edge.give_reward:
+                    cyc_count += 1.0
+            cyc_counts.append(cyc_count)
+        return cyc_counts
             
     def unnormalize(self, states):
         try:
@@ -211,7 +221,10 @@ class Simulator(gym.Env):
                 # if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
                 #     cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
                 if b_ == buchi_cycle[b].child.id:
-                    cycle_rewards.append(1.0)
+                    if buchi_cycle[b].give_reward:
+                        cycle_rewards.append(1.0)
+                    else:
+                        cycle_rewards.append(0.0)
                 else:
                     cycle_rewards.append(0.0)
             else: # epsilon transition or non-cycle transition
@@ -349,13 +362,20 @@ class Simulator(gym.Env):
             for edge in self.automaton.edges():
                 #check if it's a valid edge
                 neighbor = edge.child.id
+                if edge.child.accepting_vars.issubset(edge.parent.accepting_vars):
+                    edge.give_reward = False
+                else:
+                    edge.give_reward = True
                 if neighbor == start_state:
                     path[vertex] = edge
+                    edge.give_reward = True  # always reward visiting the accept state
                     if path not in cycles:
                         # import pdb; pdb.set_trace()
-                        # print('Found cycle {}'.format(len(cycles)))
+                        print('Found cycle {}'.format(path))
                         cycles.append(deepcopy(path))
                 else:
+                    if neighbor in self.automaton.accepting_sets:
+                        continue
                     if neighbor not in visited:
                         path[vertex] = edge
                         dfs(neighbor, deepcopy(path))

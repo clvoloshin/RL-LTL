@@ -521,7 +521,7 @@ class AutomatonRunner(object):
         # for LCRL
         self.accepting_sets = self.automaton.accepting_states
         self.epsilon_transitions = self.automaton.eps
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
     
     def is_rejecting(self, state):
         b_state, f_state = self.automaton.index_to_state(state)
