@@ -13,10 +13,10 @@ ltl:
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
-  action_std: 1.9                  # starting std for action distribution (Multivariate Normal)
+  action_std: 0.69                  # starting std for action distribution (Multivariate Normal)
   temp_decay_type: 'exponential'
   temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
-  min_action_temp: 0.55             # stop decay after action_std <= min_action_std and switch to learned std
+  min_action_temp: 0.7             # stop decay after action_std <= min_action_std and switch to learned std
   temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
   K_epochs: 1               # update policy for K epochs in one PPO update
   batch_size: 128               # update policy for K epochs in one PPO update
@@ -25,8 +25,8 @@ ppo:
   lr_critic: 0.01       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
-  n_traj: 2500 
-  n_pretrain_traj: 2500
+  n_traj: 2000 
+  n_pretrain_traj: 3000
   var_denominator: 1
   alpha: 0.3
   T: 60
@@ -63,6 +63,6 @@ visualize: True
 reward_type: 4
 load_path: 0  # 0 if not pre-loading a model, otherwise a string path to the model.
 model_name: "flatworld_orig"
-run_name: "term_randinit_one_fworld"
+run_name: "generalize_try_one_fworld"
 num_eval_trajs: 50
 baseline: "ours"

@@ -30,12 +30,14 @@ def main(cfg):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
     if cfg["baseline"] == "all":
-        baseline_types = ["ours", "pretrain_only", "cycler_only", "baseline"]
+        baseline_types = ["ours", "baseline", "ppo_only", "cycler_only"]
     else:
         baseline_types = [cfg["baseline"]]
     for bline in baseline_types:
-        reward_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, bline)
+        reward_sequence, buchi_traj_sequence, mdp_traj_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, bline)
         results_dict[bline + "_crewards"] = reward_sequence
+        results_dict[bline + "_btrajs"] = buchi_traj_sequence
+        results_dict[bline + "_mdptrajs"] = mdp_traj_sequence
         results_dict[bline + "_buchi"], results_dict[bline + "_mdp"], results_dict[bline + "_cr"] = eval_results[0], eval_results[1], eval_results[2]
         with open(results_path, 'wb') as f:
             pkl.dump(results_dict, f)
@@ -47,21 +49,31 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
         second_reward_type = 2
         pretrain_trajs = cfg['ppo']['n_pretrain_traj']
         train_trajs = cfg['ppo']['n_traj']
+        to_hallucinate = True
     elif baseline_type == "pretrain_only":
         first_reward_type = 3
         second_reward_type = 1
         pretrain_trajs = cfg['ppo']['n_pretrain_traj']
         train_trajs = cfg['ppo']['n_traj']
+        to_hallucinate = True
     elif baseline_type == "cycler_only":
         first_reward_type = 2
         second_reward_type = 2
         pretrain_trajs = 0
         train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+        to_hallucinate = True
     elif baseline_type == "baseline":  # baseline method
         first_reward_type = 1
         second_reward_type = 1
         pretrain_trajs = 0
         train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+        to_hallucinate = True
+    elif baseline_type == "ppo_only":  # baseline method
+        first_reward_type = 1
+        second_reward_type = 1
+        pretrain_trajs = 0
+        train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+        to_hallucinate = False
     else:
         print("BASELINE TYPE NOT FOUND!")
         import pdb; pdb.set_trace()
@@ -79,7 +91,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
         #pretraining phase
             cfg['reward_type'] = first_reward_type
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
-            agent, pre_orig_crewards = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"],
+            agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
                                                             save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
             total_crewards.extend(pre_orig_crewards)
             cfg['reward_type'] = second_reward_type
@@ -88,7 +100,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
             if baseline_type == "ours":
                 agent.reset_entropy()
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
-            agent, full_orig_crewards = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=True, visualize=cfg["visualize"],
+            agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
                                                             save_dir=save_dir, save_model=True, agent=agent, n_traj=train_trajs)
             total_crewards.extend(full_orig_crewards)
         if baseline_type == "ours":
@@ -99,10 +111,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
             traj_dir = None
         buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, run, sim, agent, save_dir=traj_dir)
         run.finish()
-    return total_crewards, (buchi_visits, mdp_reward, combined_rewards)
-
-def eval_policy(cfg, env, automaton, save_dir):
-    sim = Simulator(env, automaton, cfg['lambda'], reward_type=1)
+    return total_crewards, buchi_trajs, mdp_trajs, (buchi_visits, mdp_reward, combined_rewards)
     
 
 if __name__ == "__main__":
