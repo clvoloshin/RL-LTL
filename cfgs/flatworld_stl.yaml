@@ -9,13 +9,13 @@ logger:
   dir_name: flatworld_stl
 ltl:
   autobuild: False
-  formula: "G(F(r & X(F(g) & X(F(y))))) & G~b"  #"G(F(y & X(F(r)))) & G~b" 
+  formula: "G(F(y) & F(r) & F(g))" #"G(F(y) & F(r) & F(g)) & G~b"  #"G(F(y & X(F(r)))) & G~b" 
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
-  action_std: 1.8                   # starting std for action distribution (Multivariate Normal)
+  action_std: 0.69                 # starting std for action distribution (Multivariate Normal)
   temp_decay_type: 'exponential'
-  temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
+  temp_decay_rate: 0.7       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
   min_action_temp: 0.6             # stop decay after action_std <= min_action_std and switch to learned std
   temp_decay_freq__n_episodes: 10       # action_std decay frequency (in num timesteps)
   K_epochs: 1               # update policy for K epochs in one PPO update
@@ -63,6 +63,6 @@ visualize: True
 reward_type: 4
 load_path: 0  # 0 if not pre-loading a model, otherwise a string path to the model.
 model_name: "flatworld_orig"
-run_name: "fullforce_one_fworld"
+run_name: "ring_noforce_fworld"
 num_eval_trajs: 50
-baseline: "ours"
+baseline: "all"

@@ -46,6 +46,7 @@ class PPO:
         self.has_continuous_action_space = True
         action_std_init = param['ppo']['action_std']
         self.temp = param['ppo']['action_std']
+        self.original_temp = param['ppo']['action_std']
         self.alpha = param['ppo']['alpha']
         self.ltl_lambda = param['lambda']
         self.original_lambda = param['lambda']
@@ -78,6 +79,8 @@ class PPO:
         self.MseLoss = nn.MSELoss()
 
     def reset_entropy(self):
+        self.temp = self.original_temp
+        self.policy.set_action_std(self.original_temp)
         self.policy.reset_entropy()
         self.policy = self.policy.to(device)
     
@@ -155,6 +158,7 @@ class PPO:
             
             # take the cycle rewards, and find the cycle that maximizes the summed reward
             best_cycle_idx = torch.argmax(lrewards.sum(dim=0)).item()
+            #best_cycle_idx = torch.argmax((lrewards * self.ltl_lambda + rewards).sum(dim=0)).item()
             crewards = orig_crewards[:, best_cycle_idx]
             #new_crewards = torch.where(crewards > 0, self.ltl_lambda, crewards)
             # if torch.max(lrewards.sum(dim=0)).item() > 0:
@@ -222,6 +226,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     total_buchi_visits = 0
     if not testing: 
         agent.buffer.restart_traj()
+    buchi_visits = []
+    mdp_rewards = []
     # if testing & visualize:
     #     s = torch.tensor(state['mdp']).type(torch.float)
     #     b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -288,6 +294,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         mdp_ep_reward += rew_info["mdp_reward"]
         ltl_ep_reward += max(rew_info["ltl_reward"])
         constr_ep_reward += param['gamma']**(t-1) * (agent.original_lambda * (visit_buchi) + mdp_reward)
+        buchi_visits.append(visit_buchi)
+        mdp_rewards.append(mdp_reward)
         total_buchi_visits += visit_buchi
         states.append(next_state['mdp'])
         buchis.append(next_state['buchi'])
@@ -324,7 +332,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # except:
     #     pass
     #print(action)
-    return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img
+    return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img, np.array(buchi_visits), np.array(mdp_rewards)
         
 def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=True, save_dir=None, save_model=False, agent=None, n_traj=None):
     
@@ -358,6 +366,8 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
     #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
     best_creward = 0
     all_crewards = []
+    all_bvisit_trajs = []
+    all_mdpr_trajs = []
     test_creward = 0
     if n_traj is None:
         n_traj = param['ppo']['n_traj'] + param['ppo']['n_pretrain_traj']
@@ -366,7 +376,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
 
         # Get trajectory
         # tic = time.time()
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         # toc = time.time() - tic
         # print('Rollout Time', toc)
         # update weights
@@ -386,8 +396,10 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
             # set the new lambda val for the agent
             # agent.ltl_lambda = new_lambda
         all_crewards.append(creward)
+        all_bvisit_trajs.append(bvisit_traj)
+        all_mdpr_trajs.append(mdp_traj)
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
-            mdp_test_reward, ltl_test_reward, test_creward, bvisits, img = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+            mdp_test_reward, ltl_test_reward, test_creward, bvisits, img, test_bvisit_traj, test_mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
             if test_creward > best_creward and save_model:
                 best_creward = test_creward
                 agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
@@ -444,7 +456,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
             # disc_success_history += [test_data[:, 1].mean()]
             method = "PPO"
     #plt.close()
-    return agent, all_crewards
+    return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
 
 def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
     if agent is None:
@@ -463,14 +475,14 @@ def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
     print("Beginning evaluation.")
     for i_episode in tqdm(range(param["num_eval_trajs"])):
         img_path = save_dir + "/eval_traj_{}.png".format(i_episode) if save_dir is not None else save_dir
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize)
         mdp_rewards.append(mdp_ep_reward)
         avg_buchi_visits.append(bvisits)
         crewards.append(creward)
         im = Image.fromarray(img)
         if img_path is not None:
             im.save(img_path)
-    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
+    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
     print("Buchi Visits and MDP Rewards for fixed (test) policy at Eval Time:")
     print("Buchi Visits:", test_bvisits)
     print("MDP Reward:", mdp_test_reward)
