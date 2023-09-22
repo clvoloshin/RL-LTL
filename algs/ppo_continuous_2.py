@@ -90,8 +90,11 @@ class PPO:
         self.policy_old.set_action_std(new_action_std)
 
     def select_action(self, state, is_testing):
+        mdp_state = state['mdp']
+        if isinstance(state, dict):
+            mdp_state = mdp_state['state']
         with torch.no_grad():
-            state_tensor = torch.FloatTensor(state['mdp']).to(device)
+            state_tensor = torch.FloatTensor(mdp_state).to(device)
             buchi = state['buchi']
             action, action_mean, action_idx, is_eps, action_logprob, all_logprobs = self.policy_old.act(state_tensor, buchi)
             if is_testing:
@@ -214,7 +217,7 @@ class PPO:
         return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": normalized_val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 
-def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None):
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None, eval=False):
     states, buchis = [], []
     state, _ = env.reset()
     states.append(state['mdp'])
@@ -307,7 +310,10 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # if terminal:
     #     constr_ep_reward = mdp_ep_reward
     if visualize:
-        save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
+        if eval:
+            save_dir = save_dir
+        else:
+            save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
         img = env.render(states=states, save_dir=save_dir)
         # if img is not None:
         #     if testing: 
@@ -474,13 +480,14 @@ def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
     print("Beginning evaluation.")
     for i_episode in tqdm(range(param["num_eval_trajs"])):
         img_path = save_dir + "/eval_traj_{}.png".format(i_episode) if save_dir is not None else save_dir
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize, save_dir=img_path, eval=True)
         mdp_rewards.append(mdp_ep_reward)
         avg_buchi_visits.append(bvisits)
         crewards.append(creward)
-        im = Image.fromarray(img)
-        if img_path is not None:
-            im.save(img_path)
+        if img is not None:
+            im = Image.fromarray(img)
+            if img_path is not None:
+                im.save(img_path)
     mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
     print("Buchi Visits and MDP Rewards for fixed (test) policy at Eval Time:")
     print("Buchi Visits:", test_bvisits)

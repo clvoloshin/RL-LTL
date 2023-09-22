@@ -1,7 +1,7 @@
-from .base_envs.safety_gym import safety_gym
+import safety_gym
 import gym
 
-safety_gym_env = gym.make('Safexp-PointButton-v0')
+#safety_gym_env = gym.make('Safexp-PointButton-v0')
 
 # TODO: 
 class SafetyGymWrapper:
@@ -9,8 +9,8 @@ class SafetyGymWrapper:
     # def label(self):
     # def reward(self):
     def __init__(self):
-        self.original_env = gym.make('Safexp-PointButton-v0')
-        self.original_env.task = 'goal' # reward is for reaching the goal
+        self.original_env = gym.make('Safexp-PointButton1-v0')
+        #self.original_env.task = 'goal' # reward is for reaching the goal
         self.observe_buttons = True # observe the button positions
         # self.constrain_button = True
 
@@ -19,13 +19,16 @@ class SafetyGymWrapper:
     
     def reset(self):
         state = self.original_env.reset()
-        return self.state_wrapper(state)
+        return self.state_wrapper(state), {}
     
     def state_wrapper(self, state):
         return {
             'state': state,
             'data': self.original_env.data,
         }
+    
+    def get_info(self):
+        return {}
 
     def label(self, state):
         data = state['data']
@@ -44,14 +47,14 @@ class SafetyGymWrapper:
 
     def render(self, states = [], save_dir=None, save_states=False):
         states = [s['state'] for s in states]
-        self.original_env.render(states, save_dir, save_states)
+        self.original_env.render()
 
     def step(self, action):
         next_state, reward, done, info = self.original_env.step(action)
         return self.state_wrapper(next_state), reward, done, info
     
     def get_state(self):
-        return self.state_wrapper(self.obs(), self.data)
+        return self.state_wrapper(self.original_env.obs())
 
-
+safety_gym_env = SafetyGymWrapper()
     

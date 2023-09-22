@@ -44,6 +44,8 @@ class Trajectory:
     def add(self, s, b, a, r, lr, cr, s_, b_, is_eps, act_idx, logprob, edge, terminal, accepts):
         self.counter += 1
         # if r > 0: import pdb; pdb.set_trace()
+        if isinstance(s, dict):
+            s = s['state']
         self.states.append(s)
         self.buchis.append(b)
         self.next_states.append(s_)
@@ -52,7 +54,7 @@ class Trajectory:
         self.rewards.append(r)  # want this to hold the original MDP reward
         self.ltl_rewards.append(lr)
         self.cycle_rewards.append(cr)
-        self.has_reward = self.has_reward or accepts #(max(lr) > 0)  # important: should we only use accepts or ltl_reward?
+        self.has_reward = self.has_reward or (max(lr) > 0) #accepts #(max(lr) > 0)  # important: should we only use accepts or ltl_reward?
         self.done = self.done #or (lr < 0)  # TODO: look into this for other envs?
         self.is_eps.append(is_eps)
         self.act_idxs.append(act_idx)

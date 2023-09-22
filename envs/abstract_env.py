@@ -95,7 +95,7 @@ class Simulator(gym.Env):
         if self.reward_type % 2 != 0: ## IF we have a fixed reward:
             self.num_cycles = 1 # only reward one thing
             self.acc_cycle_edge_counts = [1.]
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
     
     def get_rewarding_edge_counts(self):
         return [len(cyc) for cyc in self.all_accepting_cycles]
@@ -125,7 +125,7 @@ class Simulator(gym.Env):
         if isinstance(wrapped_state, dict):
             state = wrapped_state['state']
             label_state = wrapped_state['data']
-            label, _ = self.mdp.label(label_state)
+            label, _ = self.mdp.label(wrapped_state)
         else:
             state = wrapped_state
             label, _ = self.mdp.label(state)
@@ -135,7 +135,7 @@ class Simulator(gym.Env):
             self.automaton.set_state(np.random.choice(self.automaton.n_states - 1))
         automaton_state, edge = self.automaton.step(label)
 
-        return {'mdp': state, 'buchi': automaton_state}, {'edge': edge}
+        return {'mdp': wrapped_state, 'buchi': automaton_state}, {'edge': edge}
 
         # one_hot = np.zeros(self.automaton.n_states)
         # one_hot[automaton_state] = 1.
@@ -281,9 +281,9 @@ class Simulator(gym.Env):
             #epsilon transition
             state = self.mdp.get_state()
             if isinstance(state, dict):
-                label_state = state['data']
+                wrapped_state = state
                 state = state['state']
-                label, _ = self.mdp.label(label_state)
+                label, _ = self.mdp.label(wrapped_state)
             else:
                 label, _ = self.mdp.label(state)
             if self.mdp.continuous_actions == False:
@@ -304,9 +304,10 @@ class Simulator(gym.Env):
             except:
                 state, cost, done, info = output
             if isinstance(state, dict):
-                label_state = state['data']
-                state = state['state']
-                label, _ = self.mdp.label(label_state)
+                # label_state = state['data']
+                # wrapped_state = state
+                # unwrapped_state = state['state']
+                label, _ = self.mdp.label(state)
             else:
                 label, _ = self.mdp.label(state)
             automaton_state, edge = self.automaton.step(label)
