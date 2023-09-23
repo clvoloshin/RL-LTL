@@ -27,7 +27,7 @@ class Buffer:
         self.states = np.zeros((max_,) + state_shp)
         self.actions = np.array([0 for _ in range(max_)])
         self.rewards = np.array([0 for _ in range(max_)])
-        self.ltl_rewards = np.array([0 for _ in range(max_)])
+        self.ltl_rewards = np.zeros((max_, self.num_cycles))
         self.cycle_rewards = np.zeros((max_, self.num_cycles))
         self.next_states = np.zeros((max_,) + state_shp)
         self.buchis = np.array([0 for _ in range(max_)])

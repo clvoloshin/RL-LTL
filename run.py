@@ -9,7 +9,7 @@ from datetime import datetime
 from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_value_iter_2 import run_value_iter
-from algs.Q_continuous import run_Q_continuous
+from algs.Q_continuous import run_Q_continuous, eval_q_agent
 from algs.ppo_continuous_2 import run_ppo_continuous_2, eval_agent
 from algs.sac_learning import run_sac
 import pickle as pkl
@@ -33,8 +33,12 @@ def main(cfg):
         baseline_types = ["ours", "baseline", "ppo_only", "cycler_only"]
     else:
         baseline_types = [cfg["baseline"]]
+    if 'continuous' not in cfg['classes']:
+        method = "q_learning"
+    else:
+        method = "ppo"
     for bline in baseline_types:
-        reward_sequence, buchi_traj_sequence, mdp_traj_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, bline)
+        reward_sequence, buchi_traj_sequence, mdp_traj_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, bline, method=method)
         results_dict[bline + "_crewards"] = reward_sequence
         results_dict[bline + "_btrajs"] = buchi_traj_sequence
         results_dict[bline + "_mdptrajs"] = mdp_traj_sequence
@@ -47,32 +51,32 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
     if baseline_type == "ours":
         first_reward_type = 2
         second_reward_type = 2
-        pretrain_trajs = cfg['ppo']['n_pretrain_traj']
-        train_trajs = cfg['ppo']['n_traj']
+        pretrain_trajs = cfg[method]['n_pretrain_traj']
+        train_trajs = cfg[method]['n_traj']
         to_hallucinate = True
     elif baseline_type == "pretrain_only":
         first_reward_type = 3
         second_reward_type = 1
-        pretrain_trajs = cfg['ppo']['n_pretrain_traj']
-        train_trajs = cfg['ppo']['n_traj']
+        pretrain_trajs = cfg[method]['n_pretrain_traj']
+        train_trajs = cfg[method]['n_traj']
         to_hallucinate = True
     elif baseline_type == "cycler_only":
         first_reward_type = 2
         second_reward_type = 2
         pretrain_trajs = 0
-        train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+        train_trajs = cfg[method]['n_pretrain_traj'] + cfg[method]['n_traj']
         to_hallucinate = True
     elif baseline_type == "baseline":  # baseline method
         first_reward_type = 1
         second_reward_type = 1
         pretrain_trajs = 0
-        train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+        train_trajs = cfg[method]['n_pretrain_traj'] + cfg[method]['n_traj']
         to_hallucinate = True
     elif baseline_type == "ppo_only":  # baseline method
         first_reward_type = 1
         second_reward_type = 1
         pretrain_trajs = 0
-        train_trajs = cfg['ppo']['n_pretrain_traj'] + cfg['ppo']['n_traj']
+        train_trajs = cfg[method]['n_pretrain_traj'] + cfg[method]['n_traj']
         to_hallucinate = False
     else:
         print("BASELINE TYPE NOT FOUND!")
@@ -85,7 +89,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
         total_buchis = []
         total_mdps = []
         if method != 'ppo':
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
             agent, total_crewards, total_buchis, total_mdps = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
         else:
@@ -115,7 +119,10 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
                 os.mkdir(traj_dir)
         else:
             traj_dir = None
-        buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, run, sim, agent, save_dir=traj_dir)
+        if method != 'ppo':
+            buchi_visits, mdp_reward, combined_rewards = eval_q_agent(cfg, run, sim, agent, save_dir=traj_dir)
+        else:
+            buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, run, sim, agent, save_dir=traj_dir)
         run.finish()
     return total_crewards, total_buchis, total_mdps, (buchi_visits, mdp_reward, combined_rewards)
     

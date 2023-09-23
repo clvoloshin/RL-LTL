@@ -73,7 +73,7 @@ class Q_learning:
             return action, is_eps
 
     def collect(self, s, b, a, r, lr, cr, s_, b_):
-        if lr > 0:
+        if max(lr) > 0:
             self.good_buffer.add(s, b, a, r, lr, cr, s_, b_)
         self.buffer.add(s, b, a, r, lr, cr, s_, b_)
     
@@ -124,16 +124,16 @@ class Q_learning:
                 lr = torch.tensor(lr)
                 cr = torch.tensor(cr).to(device)
                 a = torch.tensor(a).to(device)
-                best_cycle_idx = torch.argmax(cr.sum(dim=0)).item()
-                crewards = cr[:, best_cycle_idx]
+                best_cycle_idx = torch.argmax(lr.sum(dim=0)).item()
+                crewards = cr[:, best_cycle_idx].float()
                 # if sum(crewards) > 0:
                 #     import pdb; pdb.set_trace()
                 targets = crewards + self.gamma * self.Q_target(s_, b_).amax(1)
 
             q_values = self.Q(s, b, False).gather(1, a.unsqueeze(1))
             # td_error = q_values - targets.to_tensor(0).unsqueeze(1).clone().detach()
-
-            loss_func = torch.nn.MSELoss()
+            #import pdb; pdb.set_trace()
+            loss_func = torch.nn.SmoothL1Loss()
             loss = loss_func(q_values, targets.to_tensor(0).unsqueeze(1).clone().detach())
             
             if self.ltl_lambda != 0:
@@ -211,7 +211,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # agent.buffer.atomics.append(info['signal'])
         visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
         mdp_ep_reward += rew_info["mdp_reward"]
-        ltl_ep_reward += rew_info["ltl_reward"]
+        ltl_ep_reward += max(rew_info["ltl_reward"])
         disc_ep_reward += param['gamma']**(t-1) * mdp_reward
         buchi_visits.append(visit_buchi)
         mdp_rewards.append(mdp_reward)
@@ -274,18 +274,18 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
                     to_log = save_dir + "/trajectory.png" if save_dir is not None else save_dir
                 else:
                     to_log = img
-            runner.log({'R_LTL': ltl_ep_reward,                
-                        'R_MDP': mdp_ep_reward,
-                        'LossVal': current_loss,
-                        #'AvgTimesteps': t,
-                        #  'TimestepsAlive': avg_timesteps,
-                        #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
-                            'ActionTemp': agent.temp,
-                            #'EntropyLoss': loss_info["entropy_loss"],
-                            "Test_R_LTL": ltl_test_reward,
-                            "Test_R_MDP": mdp_test_reward,
-                            "Dual Reward": test_creward,
-                            "testing": wandb.Image(to_log)})
+                runner.log({'R_LTL': ltl_ep_reward,                
+                            'R_MDP': mdp_ep_reward,
+                            'LossVal': current_loss,
+                            #'AvgTimesteps': t,
+                            #  'TimestepsAlive': avg_timesteps,
+                            #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
+                                'ActionTemp': agent.temp,
+                                #'EntropyLoss': loss_info["entropy_loss"],
+                                "Test_R_LTL": ltl_test_reward,
+                                "Test_R_MDP": mdp_test_reward,
+                                "Dual Reward": test_creward,
+                                "testing": wandb.Image(to_log)})
             # runner.log({'R_LTL': ltl_ep_reward,
             #     'R_MDP': mdp_ep_reward,
             #     'LossVal': current_loss,
@@ -315,7 +315,7 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
             
     return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
     
-def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
+def eval_q_agent(param, runner, env, agent, visualize=True, save_dir=None):
     if agent is None:
         agent = Q_learning(
         env.observation_space, 

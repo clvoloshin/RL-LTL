@@ -51,7 +51,7 @@ gamma: .98
 n_grad_updates: 1
 delta: .1
 n_seeds: 10
-init_seed: 623
+init_seed: 99
 replay_buffer_size: 10000
 checkpoint_freq__n_episodes: 50
 lambda: 400.0
@@ -63,6 +63,6 @@ visualize: True
 reward_type: 4
 load_path: 0  # 0 if not pre-loading a model, otherwise a string path to the model.
 model_name: "flatworld_orig"
-run_name: "generalize_try_one_fworld"
+run_name: "hard_task_paper6_fworld"
 num_eval_trajs: 50
-baseline: "ours"
+baseline: "all"

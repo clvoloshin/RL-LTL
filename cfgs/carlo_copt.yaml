@@ -11,7 +11,7 @@ ltl:
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
-  action_std: .5                  # starting std for action distribution (Multivariate Normal)
+  action_std: .29                  # starting std for action distribution (Multivariate Normal)
   temp_decay_type: 'exponential'
   temp_decay_rate: 0.999       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
   min_action_temp: 0.3             # minimum action_std (stop decay after action_std <= min_action_std)
@@ -23,11 +23,11 @@ ppo:
   lr_critic: 0.01       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
-  n_traj: 2500
-  n_pretrain_traj: 2500
+  n_traj: 3000
+  n_pretrain_traj: 3000
   alpha: 0.1  
   var_denominator: 1.0
-  T: 400 
+  T: 250 
 q_learning:
   batches_per_update: 5
   batch_size: 128
@@ -51,15 +51,15 @@ n_seeds: 10
 init_seed: 314
 replay_buffer_size: 7500
 checkpoint_freq__n_episodes: 50
-lambda: 200.0
+lambda: 500.0
 lambda_decay_freq__n_episodes: 1000
 lambda_decay_rate: 1.0
 lambda_decay_type: 'exponential'
 min_lambda: 75.0
-visualize: True
+visualize: False
 reward_type: 2
 load_path: 0
 model_name: "carlo_figeight"
-run_name: "longer_carlo_work"
+run_name: "newthing_carlo_work"
 num_eval_trajs: 50
-baseline: "ours"
+baseline: "cycler_only"

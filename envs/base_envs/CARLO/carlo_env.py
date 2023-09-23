@@ -22,6 +22,7 @@ class CarloEnv:
         self.continuous_actions = continuous_actions
         self.ppm = 20
         self.border_radius = 2.5
+        self.waypoint_radius = 3.0
 
         w = World(dt, width = world_width, height = world_height, ppm = self.ppm) # The world is 120 meters by 120 meters. ppm is the pixels per meter.
 
@@ -34,8 +35,8 @@ class CarloEnv:
         cb2 = CircleBuilding(Point(world_width* (2/3), world_height/2), self.inner_building_radius, 'gray80')
         self.cb1 = cb1
         self.cb2 = cb2
-        w.add(cb1)
-        w.add(cb2)
+        # w.add(cb1)
+        # w.add(cb2)
         toprect = RectangleBuilding(Point(world_width /2, world_height - self.border_radius), Point(world_width, self.border_radius * 2), 'gray80')
         bottomrect = RectangleBuilding(Point(world_width / 2., self.border_radius), Point(world_width, self.border_radius * 2), 'gray80')
         leftrect = RectangleBuilding(Point(self.border_radius, world_height / 2), Point(self.border_radius * 2, world_height - (self.border_radius * 4)), 'gray80')
@@ -81,9 +82,11 @@ class CarloEnv:
         lane_marker_width = cb1.center.x - cb1.radius - self.border_radius * 2
         self.lane_marker_width = lane_marker_width
         # Let's also add some lane markers on the ground. This is just decorative. Because, why not.
-        self.waypoints.append(Painting(Point(self.border_radius  * 2 + (lane_marker_width / 2.), world_height / 2.), Point(lane_marker_width, lane_marker_height), 'blue'))
-        self.waypoints.append(Painting(Point(world_width - (self.border_radius  * 2 + (lane_marker_width / 2.)), world_height / 2.),
-                                       Point(lane_marker_width, lane_marker_height), 'blue'))
+        # self.waypoints.append(Painting(Point(self.border_radius  * 2 + (lane_marker_width / 2.), world_height / 2.), Point(lane_marker_width, lane_marker_height), 'blue'))
+        # self.waypoints.append(Painting(Point(world_width - (self.border_radius  * 2 + (lane_marker_width / 2.)), world_height / 2.),
+        #                                Point(lane_marker_width, lane_marker_height), 'blue'))
+        self.waypoints.append(CircleBuilding(Point(world_width* (1/6), world_height/2), self.waypoint_radius, 'blue'))
+        self.waypoints.append(CircleBuilding(Point(world_width* (5/6), world_height/2), self.waypoint_radius, 'blue'))
         for wp in self.waypoints:
             wp.collidable = False
             w.add(wp) 
@@ -96,7 +99,7 @@ class CarloEnv:
         self.world = w
         self.reset()
         self.world.render() # This visualizes the world we just constructed.
-
+        # import pdb; pdb.set_trace()
         # gym environment specific variables
         if continuous_actions:
             self.action_space = spaces.Box(-1., 1., shape=(2,), dtype=np.float32)
