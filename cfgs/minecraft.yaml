@@ -20,8 +20,8 @@ q_learning:
   temp_decay_rate: .9
   min_action_temp: 0.01
   n_traj: 500
-  T: 100
-  init_temp: .3
+  T: 1000
+  init_temp: .6
   lr: .001
   iterations_per_target_update: 5
   temp_decay_type: 'exponential'
@@ -41,3 +41,5 @@ reward_type: 1
 load_path: 0  # 0 if not pre-loading a model, otherwise a string path to the model.
 model_name: "minecraft_norew"
 run_name: "minecraft_trial"
+num_eval_trajs: 50
+baseline: "baseline"

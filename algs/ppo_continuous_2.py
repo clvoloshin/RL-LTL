@@ -91,7 +91,7 @@ class PPO:
 
     def select_action(self, state, is_testing):
         mdp_state = state['mdp']
-        if isinstance(state, dict):
+        if isinstance(mdp_state, dict):
             mdp_state = mdp_state['state']
         with torch.no_grad():
             state_tensor = torch.FloatTensor(mdp_state).to(device)

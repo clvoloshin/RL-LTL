@@ -82,10 +82,12 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
     # run_Q_STL(cfg, run, sim)
     # copt = ConstrainedOptimization(cfg, run, sim)
         total_crewards = []
+        total_buchis = []
+        total_mdps = []
         if method != 'ppo':
             import pdb; pdb.set_trace()
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
-            agent, total_crewards = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
+            agent, total_crewards, total_buchis, total_mdps = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
         else:
         #run_sac(cfg, run, sim)
         #pretraining phase
@@ -94,6 +96,8 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
             agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
                                                             save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
             total_crewards.extend(pre_orig_crewards)
+            total_buchis.extend(buchi_trajs)
+            total_mdps.extend(mdp_trajs)
             cfg['reward_type'] = second_reward_type
             if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
                 agent.reset_entropy()
@@ -103,6 +107,8 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
             agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
                                                             save_dir=save_dir, save_model=True, agent=agent, n_traj=train_trajs)
             total_crewards.extend(full_orig_crewards)
+            total_buchis.extend(buchi_trajs)
+            total_mdps.extend(mdp_trajs)
         if baseline_type == "ours":
             traj_dir = save_dir + '/trajectories'
             if not os.path.exists(traj_dir):
@@ -111,7 +117,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
             traj_dir = None
         buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, run, sim, agent, save_dir=traj_dir)
         run.finish()
-    return total_crewards, buchi_trajs, mdp_trajs, (buchi_visits, mdp_reward, combined_rewards)
+    return total_crewards, total_buchis, total_mdps, (buchi_visits, mdp_reward, combined_rewards)
     
 
 if __name__ == "__main__":
