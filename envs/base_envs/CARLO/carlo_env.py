@@ -86,7 +86,7 @@ class CarloEnv:
         self.waypoints.append(Painting(Point(self.border_radius  * 2 + (lane_marker_width / 2.), world_height / 2.), Point(lane_marker_width, lane_marker_height), 'blue'))
         self.waypoints.append(Painting(Point(world_width - (self.border_radius  * 2 + (lane_marker_width / 2.)), world_height / 2.),
                                        Point(lane_marker_width, lane_marker_height), 'blue'))
-        self.waypoints.append(Painting(Point(world_width / 2., world_height / 2.), Point(middle_width, lane_marker_height), 'blue'))
+        # self.waypoints.append(Painting(Point(world_width / 2., world_height / 2.), Point(middle_width, lane_marker_height), 'blue'))
         # self.waypoints.append(Painting())
         # self.waypoints.append(CircleBuilding(Point(world_width* (1/6), world_height/2), self.waypoint_radius, 'blue'))
         # self.waypoints.append(CircleBuilding(Point(world_width* (5/6), world_height/2), self.waypoint_radius, 'blue'))
@@ -277,5 +277,5 @@ class CarloEnv:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, circle_outer_reward, terminated, {}
+        return self.state, circle_inner_reward, terminated, {}
         
