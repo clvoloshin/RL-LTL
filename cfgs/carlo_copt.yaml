@@ -60,6 +60,6 @@ visualize: False
 reward_type: 2
 load_path: 0
 model_name: "carlo_figeight"
-run_name: "papertryinner_carlo_work"
+run_name: "papertryouter_carlo_work"
 num_eval_trajs: 50
 baseline: "cycler_only"

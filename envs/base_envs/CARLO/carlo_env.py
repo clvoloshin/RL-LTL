@@ -277,5 +277,5 @@ class CarloEnv:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, circle_inner_reward, terminated, {}
+        return self.state, circle_outer_reward, terminated, {}
         
