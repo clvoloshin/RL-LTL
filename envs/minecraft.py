@@ -100,7 +100,7 @@ class Minecraft(SlipperyGrid):
         rows = []
         cols = []
         if states:
-            dist = np.array([self.index_to_state(x) for x in states])
+            dist = np.array([x for x in states])
             cols = dist[...,0].reshape(-1)
             rows = dist[...,1].reshape(-1)
             

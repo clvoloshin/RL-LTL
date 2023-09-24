@@ -7,7 +7,7 @@ logger:
   dir_name: carlo_copt
 ltl:
   autobuild: False
-  formula: "G(F(wp_0 & X(F(wp_1)))) & G~crash" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
+  formula: "G(F(wp_0) & F(wp_1) & F(wp_2)) & G~crash" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
@@ -56,7 +56,7 @@ lambda_decay_freq__n_episodes: 1000
 lambda_decay_rate: 1.0
 lambda_decay_type: 'exponential'
 min_lambda: 75.0
-visualize: False
+visualize: True
 reward_type: 2
 load_path: 0
 model_name: "carlo_figeight"

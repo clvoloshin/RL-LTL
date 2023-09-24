@@ -35,8 +35,8 @@ class CarloEnv:
         cb2 = CircleBuilding(Point(world_width* (2/3), world_height/2), self.inner_building_radius, 'gray80')
         self.cb1 = cb1
         self.cb2 = cb2
-        # w.add(cb1)
-        # w.add(cb2)
+        w.add(cb1)
+        w.add(cb2)
         toprect = RectangleBuilding(Point(world_width /2, world_height - self.border_radius), Point(world_width, self.border_radius * 2), 'gray80')
         bottomrect = RectangleBuilding(Point(world_width / 2., self.border_radius), Point(world_width, self.border_radius * 2), 'gray80')
         leftrect = RectangleBuilding(Point(self.border_radius, world_height / 2), Point(self.border_radius * 2, world_height - (self.border_radius * 4)), 'gray80')
@@ -80,13 +80,16 @@ class CarloEnv:
         lane_marker_height = 0.5 #np.sqrt(2*(lane_markers_radius**2)*(1-np.cos((2*np.pi)/(2*num_of_lane_markers)))) # approximate the circle with a polygon and then use cosine theorem
         # import pdb; pdb.set_trace()
         lane_marker_width = cb1.center.x - cb1.radius - self.border_radius * 2
+        middle_width = cb2.center.x - cb1.center.x - 2 * self.inner_building_radius
         self.lane_marker_width = lane_marker_width
         # Let's also add some lane markers on the ground. This is just decorative. Because, why not.
-        # self.waypoints.append(Painting(Point(self.border_radius  * 2 + (lane_marker_width / 2.), world_height / 2.), Point(lane_marker_width, lane_marker_height), 'blue'))
-        # self.waypoints.append(Painting(Point(world_width - (self.border_radius  * 2 + (lane_marker_width / 2.)), world_height / 2.),
-        #                                Point(lane_marker_width, lane_marker_height), 'blue'))
-        self.waypoints.append(CircleBuilding(Point(world_width* (1/6), world_height/2), self.waypoint_radius, 'blue'))
-        self.waypoints.append(CircleBuilding(Point(world_width* (5/6), world_height/2), self.waypoint_radius, 'blue'))
+        self.waypoints.append(Painting(Point(self.border_radius  * 2 + (lane_marker_width / 2.), world_height / 2.), Point(lane_marker_width, lane_marker_height), 'blue'))
+        self.waypoints.append(Painting(Point(world_width - (self.border_radius  * 2 + (lane_marker_width / 2.)), world_height / 2.),
+                                       Point(lane_marker_width, lane_marker_height), 'blue'))
+        self.waypoints.append(Painting(Point(world_width / 2., world_height / 2.), Point(middle_width, lane_marker_height), 'blue'))
+        # self.waypoints.append(Painting())
+        # self.waypoints.append(CircleBuilding(Point(world_width* (1/6), world_height/2), self.waypoint_radius, 'blue'))
+        # self.waypoints.append(CircleBuilding(Point(world_width* (5/6), world_height/2), self.waypoint_radius, 'blue'))
         for wp in self.waypoints:
             wp.collidable = False
             w.add(wp) 

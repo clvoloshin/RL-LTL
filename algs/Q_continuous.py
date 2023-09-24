@@ -157,7 +157,7 @@ class Q_learning:
                 self.iterations_since_last_target_update = 0
         return loss.detach().mean()
 
-def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None):
+def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None, eval=False):
     states, buchis = [], []
     state, _ = env.reset()
     mdp_ep_reward = 0
@@ -222,7 +222,10 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         states.append(state['mdp'])
         buchis.append(state['buchi'])
     if visualize:
-        save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
+        if eval:
+            save_dir = save_dir
+        else:
+            save_dir = save_dir + "/trajectory.png" if save_dir is not None else save_dir
         img = env.render(states=states, save_dir=save_dir)
     else:
         img = None
@@ -243,6 +246,8 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
     test_creward = 0
     for i_episode in tqdm(range(param['q_learning']['n_traj'])):
         # TRAINING
+        # if i_episode > 300:
+        #     import pdb; pdb.set_trace()
         mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
@@ -270,7 +275,7 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
         all_mdpr_trajs.append(mdp_traj)
         if visualize and testing:
             if i_episode >= 1 and i_episode % 1 == 0:
-                if img is None:
+                if img is None: 
                     to_log = save_dir + "/trajectory.png" if save_dir is not None else save_dir
                 else:
                     to_log = img

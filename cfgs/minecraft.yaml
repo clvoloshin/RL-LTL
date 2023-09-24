@@ -19,8 +19,9 @@ q_learning:
   temp_decay_freq__n_episodes: 25
   temp_decay_rate: .9
   min_action_temp: 0.01
-  n_traj: 500
-  T: 1000
+  n_traj: 1000
+  n_pretrain_traj: 500
+  T: 100
   init_temp: .6
   lr: .001
   iterations_per_target_update: 5
@@ -33,7 +34,7 @@ n_grad_updates: 1
 delta: .1
 n_seeds: 10
 init_seed: 314
-lambda: 500.0
+lambda: 5.0
 replay_buffer_size: 50000
 checkpoint_freq__n_episodes: 50
 visualize: True
