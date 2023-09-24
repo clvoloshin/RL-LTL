@@ -264,7 +264,7 @@ class CarloEnv:
         #reward = (-1 * np.linalg.norm(u)) #* 0.25
         relative_position = np.array([self.agent.x/self.world_width, self.agent.y/self.world_height])
         # Reward is higher if the agent is closer to the edges of the map.
-        # circle_outer_reward = np.square(self.agent.x/self.world_width - center_x) + np.square(self.agent.y/self.world_height - center_y)
+        circle_outer_reward = 2 * np.square(self.agent.x/self.world_width - 0.5) + 2 * np.square(self.agent.y/self.world_height - 0.5)
         reward_normalizing_constant = 40
         #reward = (min(self.distance_to_potholes(self.state)) / reward_normalizing_constant) ** 2
         # Reward is higher if the agent is closer to the center of the map.
@@ -277,5 +277,5 @@ class CarloEnv:
         #     import pdb; pdb.set_trace()
         # if self.distance_to_waypoints(self.state) < 2:
 
-        return self.state, circle_inner_reward, terminated, {}
+        return self.state, circle_outer_reward, terminated, {}
         
