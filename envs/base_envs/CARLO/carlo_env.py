@@ -23,6 +23,7 @@ class CarloEnv:
         self.ppm = 20
         self.border_radius = 2.5
         self.waypoint_radius = 3.0
+        self.render_live = False
 
         w = World(dt, width = world_width, height = world_height, ppm = self.ppm) # The world is 120 meters by 120 meters. ppm is the pixels per meter.
 

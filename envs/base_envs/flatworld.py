@@ -57,7 +57,7 @@ class FlatWorld(gym.Env):
         self.B = np.eye(2) * self.dt
         self.init_state =  np.array([-1, -1])
         self.n_implied_states = int(np.ceil(np.prod((high - low) / self.dt + 1)))
-
+        self.render_live = False
 
         # useful range is -1 .. +1, but spikes can be higher
         self.observation_space = spaces.Box(low, high)

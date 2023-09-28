@@ -251,6 +251,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # TODO: update the env_step function to return edge, terminal as info
         # try:
         next_state, mdp_reward, done, info = env.step(action, is_eps)
+        if testing and visualize:
+            if env.mdp.render_live:
+                env.render()
         # except:
         #     next_state, mdp_reward, done, _, info = env.step(action, is_eps)
         #reward = int(info['is_accepting'])
@@ -309,7 +312,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         state = next_state
     # if terminal:
     #     constr_ep_reward = mdp_ep_reward
-    if visualize:
+    # if env.mdp.render_live and visualize:
+    #     env.mdp.close()
+    if visualize and not env.mdp.render_live:
         if eval:
             save_dir = save_dir
         else:
@@ -411,8 +416,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
             testing = True
         else:
             testing = False
-        
-        if visualize and testing:
+        if visualize and testing and not env.mdp.render_live:
             if i_episode >= 1 and i_episode % 1 == 0:
                 if img is None:
                     to_log = save_dir + "/trajectory.png" if save_dir is not None else save_dir

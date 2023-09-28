@@ -56,10 +56,10 @@ lambda_decay_freq__n_episodes: 1000
 lambda_decay_rate: 1.0
 lambda_decay_type: 'exponential'
 min_lambda: 75.0
-visualize: False
+visualize: True
 reward_type: 2
 load_path: 0
 model_name: "carlo_figeight"
-run_name: "papertryouter_carlo_work"
+run_name: "Papertryouter_carlo_work"
 num_eval_trajs: 50
 baseline: "cycler_only"

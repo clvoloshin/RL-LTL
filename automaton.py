@@ -102,7 +102,7 @@ def parse_bdd(bdd, d): #(bdd:buddy.bdd, d:spot.bdd_dict):
 
 
 class AutomatonEdge(object):
-    def __init__(self, parent, condition, condition_dict, child, acc_frontier):
+    def __init__(self, parent, condition, condition_dict, child, acc_frontier=None):
         self.parent = parent
         self.condition = condition
         self.condition_dict = condition_dict
@@ -175,9 +175,11 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
         if oa_type == 'dra':
             out=check_output([rabinizer, '-c', self.formula] , shell=platform=='win32', env=env)
         elif oa_type == 'ldba':
+            out=check_output([rabinizer, '-d', '-e', self.formula] , shell=platform=='win32', env=env)
+            out, n_eps = self.parse_ldba_hoa(out)
+        elif oa_type == 'gldba':
             out=check_output([rabinizer, '-e', self.formula] , shell=platform=='win32', env=env)
             out, n_eps = self.parse_ldba_hoa(out)
-        
         filename = self.random_hoa_filename()
         with open(filename,'wb') as f:
             f.write(out)
@@ -217,7 +219,10 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
         self.accepting_states = set()
         
         self.G = nx.DiGraph()
-        self.parse(aut)
+        if oa_type == 'gldba':
+            self.parse_generalized(aut)
+        else:
+            self.parse(aut)
         #import pdb; pdb.set_trace()
     
     def build_formula(self, formula, autobuild):
@@ -389,6 +394,64 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
     def parse(self, atm:Union[spot.twa, spot.twa_graph], additional_conditions=[]):
 
         parser = LTLfParser()
+
+        self.states = dict()  # type: Dict[int, Node]
+        acceptance_type = atm.get_acceptance()
+        # disjuncts = acceptance_type.top_disjuncts()
+        # acceptance_sets = np.array([[[x for x in disjunct.top_conjuncts()[0].fin_unit().sets()][0], [x for x in  disjunct.top_conjuncts()[1].inf_unit().sets()][0]] for disjunct in disjuncts])
+
+        self.aps = [x.ap_name() for x in atm.ap()]
+        # queue = atm.num_states()  # type: Set[int]
+        processed = set()                      # type: Set[int]
+        for state_num in range(atm.num_states()):
+            # state_num = queue.pop()
+            processed.add(state_num)
+
+            src = self.states.setdefault(state_num, AutomatonState(state_num))
+            for e in list(atm.out(state_num)):  # type: spot.twa_graph_edge_storage
+                # if e.dst not in processed:
+                #     queue.add(e.dst)
+
+                dst_node = self.states.setdefault(e.dst, AutomatonState(e.dst))
+                
+                # state-based
+                if e.acc.count() > 0: 
+                    # acc = [x for x in e.acc.sets()][0]
+                    # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
+                        # src.set_accepting(i, fin_or_inf)
+                    self.accepting_states.add(src.id)
+                    src.set_accepting(0, 1)
+
+                #trans based
+                
+                conditions = parse_bdd(e.cond, atm.get_dict())
+
+                for condition, condition_dict in conditions.items():
+                    edge = AutomatonEdge(src, parser(condition), condition_dict, dst_node)
+
+                    # # transition-based
+                    # if e.acc.count() > 0: 
+                    #     # acc = [x for x in e.acc.sets()][0]
+                    #     # for (i, fin_or_inf) in np.atleast_2d(np.hstack(np.where(acceptance_sets == acc))).tolist():
+                    #     #     edge.set_accepting(i, fin_or_inf)
+                    #     # self.accepting_states.add(src)
+                    #     edge.set_accepting(0, 1)
+
+                    if all([x.satisfied(edge) for x in additional_conditions]):
+                        src.add_edge(edge)
+                        dst_node.add_parent(edge)
+                    else:
+                        print('Edge Deleted: ', edge)
+                    self.G.add_edge(src.id, dst_node.id, edge = edge, condition = condition)
+                    
+
+        self.n_states = len(self.states)
+        self.num_buchi_states = self.n_states
+        self.start_state = atm.get_init_state_number()
+    
+    def parse_generalized(self, atm:Union[spot.twa, spot.twa_graph], additional_conditions=[]):
+
+        parser = LTLfParser()
         #import pdb; pdb.set_trace()
         self.states = dict()  # type: Dict[int, Node]
         self.temp_states = dict()
@@ -417,14 +480,6 @@ class Automaton(object):  # Now for GENERALIZED LDBA --> LDBA MAPPING
 
                 src = self.temp_states.setdefault(new_state_num, AutomatonState(new_state_num, {}))
                 src.set_accepting_vars(accepting_set)
-                # if len(src.accepting_vars) == 0 and len(frontier_state1) == 0:
-                #     if state_num != atm.num_states() - 1: 
-                #         init_b_state = state_num
-                # if frontier_state1 == self.frontier_set:
-                #     if new_state_num != (atm.num_states() * len(self.all_frontier_states) - 1):
-                #         # in the special case, the last node is not accepting since it's terminal.
-                #         self.temp_accepting_states.add(src.id)
-                #         src.set_accepting(0, 1)
                     
         # now, add the edges.
         for state_num in range(atm.num_states()):
@@ -512,7 +567,7 @@ class AutomatonRunner(object):
     
     def is_rejecting(self, state):
         # b_state, f_state = self.automaton.index_to_state(state)
-        return state == self.automaton.num_buchi_states - 1
+        return state == self.automaton.n_states - 1
 
     def set_state(self, state):
         # b_state, f_state = self.automaton.index_to_state(state)

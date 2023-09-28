@@ -9,7 +9,8 @@ from datetime import datetime
 from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_value_iter_2 import run_value_iter
-from algs.Q_continuous import run_Q_continuous, eval_q_agent
+# from algs.Q_continuous import run_Q_continuous, eval_q_agent
+from algs.Q_discrete import run_Q_discrete, eval_q_agent
 from algs.ppo_continuous_2 import run_ppo_continuous_2, eval_agent
 from algs.sac_learning import run_sac
 import pickle as pkl
@@ -30,7 +31,7 @@ def main(cfg):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
     if cfg["baseline"] == "all":
-        baseline_types = ["ours", "baseline", "ppo_only", "cycler_only"]
+        baseline_types = ["ours", "baseline", "pretrain_only", "cycler_only"]
     else:
         baseline_types = [cfg["baseline"]]
     if 'continuous' not in cfg['classes']:
@@ -49,7 +50,7 @@ def main(cfg):
 
 def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
     if baseline_type == "ours":
-        first_reward_type = 2
+        first_reward_type = 4
         second_reward_type = 2
         pretrain_trajs = cfg[method]['n_pretrain_traj']
         train_trajs = cfg[method]['n_traj']
@@ -91,7 +92,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
         if method != 'ppo':
             # import pdb; pdb.set_trace()
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
-            agent, total_crewards, total_buchis, total_mdps = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
+            agent, total_crewards, total_buchis, total_mdps = run_Q_discrete(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
         else:
         #run_sac(cfg, run, sim)
         #pretraining phase

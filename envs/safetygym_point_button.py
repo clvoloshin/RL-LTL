@@ -16,10 +16,15 @@ class SafetyGymWrapper:
 
         self.action_space = self.original_env.action_space
         self.observation_space = self.original_env.observation_space
+        self.render_live = True
     
     def reset(self):
+        self.close()
         state = self.original_env.reset()
         return self.state_wrapper(state), {}
+
+    def close(self):
+        self.original_env.close()
     
     def state_wrapper(self, state):
         return {
