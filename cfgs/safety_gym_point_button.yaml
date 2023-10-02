@@ -56,7 +56,7 @@ lambda_decay_freq__n_episodes: 1000
 lambda_decay_rate: 1.0
 lambda_decay_type: 'exponential'
 min_lambda: 75.0
-visualize: True
+visualize: False
 reward_type: 4
 load_path: 0  # 0 if not pre-loading a model, otherwise a string path to the model.
 model_name: "safetygym_pointbutton"
