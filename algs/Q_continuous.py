@@ -92,30 +92,31 @@ class Q_learning:
         self.temp = round(self.temp, 4)
         print(f'Setting temperature: {self.temp}')
     
-    # def sample_from_both_buffers(self, batch_size):
-    #     # first, sample (at most) half the data from the good buffer
-    #     s, b, a, r, lr, cr, s_, b_ = self.good_buffer.sample(int(batch_size / 2))
-    #     if len(s) < int(self.batch_size / 2):
-    #         # if the good buffer doesn't have enough data, sample the rest from the bad buffer
-    #         remaining_size = batch_size - len(s)
-    #     else:
-    #         remaining_size = int(batch_size / 2)
-    #     s2, b2, a2, r2, lr2, cr2, s_2, b_2 = self.buffer.sample(remaining_size)
-    #     s = np.concatenate((s, s2))
-    #     b = np.concatenate((b, b2))
-    #     a = np.concatenate((a, a2))
-    #     r = np.concatenate((r, r2))
-    #     lr = np.concatenate((lr, lr2))
-    #     cr = np.concatenate((cr, cr2))
-    #     s_ = np.concatenate((s_, s_2))
-    #     b_ = np.concatenate((b_, b_2))
-    #     return s, b, a, r, lr, cr, s_, b_
+    def sample_from_both_buffers(self, batch_size):
+        # first, sample (at most) half the data from the good buffer
+        s, b, a, r, lr, cr, s_, b_ = self.good_buffer.sample(int(batch_size / 2))
+        if len(s) < int(self.batch_size / 2):
+            # if the good buffer doesn't have enough data, sample the rest from the bad buffer
+            remaining_size = batch_size - len(s)
+        else:
+            remaining_size = int(batch_size / 2)
+        s2, b2, a2, r2, lr2, cr2, s_2, b_2 = self.buffer.sample(remaining_size)
+        s = np.concatenate((s, s2))
+        b = np.concatenate((b, b2))
+        a = np.concatenate((a, a2))
+        r = np.concatenate((r, r2))
+        lr = np.concatenate((lr, lr2))
+        cr = np.concatenate((cr, cr2))
+        s_ = np.concatenate((s_, s_2))
+        b_ = np.concatenate((b_, b_2))
+        return s, b, a, r, lr, cr, s_, b_
     
     def update(self):
         for _ in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():
-                s, b, a, r, lr, cr, s_, b_ = self.buffer.sample(self.batch_size)
+                s, b, a, r, lr, cr, s_, b_ = self.sample_from_both_buffers(self.batch_size)
+                #s, b, a, r, lr, cr, s_, b_ = self.buffer.sample(self.batch_size)
                 s = torch.tensor(s).type(torch.float).to(device)
                 b = torch.tensor(b).type(torch.int64).unsqueeze(1).unsqueeze(1).to(device)
                 s_ = torch.tensor(s_).type(torch.float).to(device)
@@ -302,21 +303,22 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
             #         "Test_R_LTL": ltl_test_reward,
             #         "Test_R_MDP": mdp_test_reward
             #         "testing": wandb.Image(to_log)})
-        if i_episode % 1 == 0:
-            runner.log({#'Iteration': i_episode,
-                'R_LTL': ltl_ep_reward,
-                'R_MDP': mdp_ep_reward,
-                'LossVal': current_loss,
-                #'AvgTimesteps': t,
-                #  'TimestepsAlive': avg_timesteps,
-                #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
-                    'ActionTemp': agent.temp,
-                    #'EntropyLoss': loss_info["entropy_loss"],
-                    "Test_R_LTL": ltl_test_reward,
-                    "Test_R_MDP": mdp_test_reward,
-                    "Dual Reward": test_creward,
+        else:
+            if i_episode % 1 == 0:
+                runner.log({#'Iteration': i_episode,
+                    'R_LTL': ltl_ep_reward,
+                    'R_MDP': mdp_ep_reward,
+                    'LossVal': current_loss,
+                    #'AvgTimesteps': t,
+                    #  'TimestepsAlive': avg_timesteps,
+                    #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
+                        'ActionTemp': agent.temp,
+                        #'EntropyLoss': loss_info["entropy_loss"],
+                        "Test_R_LTL": ltl_test_reward,
+                        "Test_R_MDP": mdp_test_reward,
+                        "Dual Reward": test_creward,
 
-                    })
+                        })
             
     return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
     

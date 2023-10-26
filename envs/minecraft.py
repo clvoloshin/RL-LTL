@@ -50,10 +50,12 @@ class Minecraft(SlipperyGrid):
         labels[0:10, 0:10] = 'safe'
         labels[0:3, 5] = 'obstacle'
         labels[2, 7:10] = 'obstacle'
-        # labels[0][0] = labels[4][5] = labels[8][1] = labels[8][7] = 'grass'
-        # labels[2][2] = labels[7][3] = labels[5][7] = labels[9][9] = 'wood'
+        labels[4][5] = labels[8][1] = labels[8][7] = labels[9][9] = 'wood'
+        labels[3][2] = labels[7][3] = labels[5][7] = labels[0][0] = 'wood'
+        labels[2][2] = labels[2][3] = labels[0][8] = labels[4][8] = 'wood'
+        labels[2][1] = labels[3][1] = 'wood'
         # labels[0][3] = labels[4][0] = labels[6][8] = labels[9][4] = 'iron'
-        # labels[6][1] = labels[6][5] = 
+        labels[2][0] = labels[3][0] = 'grass'
         labels[4][9] = 'work_bench'
         # labels[2][4] = labels[9][0] = labels[7][7] = 'tool_shed'
         labels[0][7] = 'gold'
@@ -72,19 +74,23 @@ class Minecraft(SlipperyGrid):
                     X = Floor('red')
                     self.grid.set(row, col, X)
                     self.coins[(row, col)] = Coin('coin_1', 'green', X)
-                # if label == 'grass':
-                #     minecraft.grid.set(row, col, Floor('green'))
-                # if label == 'wood':
-                #     minecraft.grid.set(row, col, Floor('blue'))
+                elif label == 'grass':
+                    X = Floor('green')
+                    self.grid.set(row, col, X)
+                    self.coins[(row, col)] = Coin('coin_1', 'green', X)
+                elif label == 'wood':
+                    X = Floor('purple')
+                    self.grid.set(row, col, X)
+                    self.coins[(row, col)] = Coin('coin_1', 'green', X)
                 # if label == 'iron':
                 #     minecraft.grid.set(row, col, Floor('purple'))
-                if label == 'work_bench':
+                elif label == 'work_bench':
                     X = Floor('blue')
                     self.grid.set(row, col, X)
                     self.coins[(row, col)] = Coin('coin_2', 'green', X)
                 # if label == 'tool_shed':
                 #     minecraft.grid.set(row, col, Floor('blue'))
-                if label == 'gold':
+                elif label == 'gold':
                     X = Floor('yellow')
                     self.grid.set(row, col, X)
                     self.coins[(row, col)] = Coin('coin_3', 'green', X)
@@ -100,7 +106,7 @@ class Minecraft(SlipperyGrid):
         rows = []
         cols = []
         if states:
-            dist = np.array([x for x in states])
+            dist = np.array([self.index_to_state(x) for x in states])
             cols = dist[...,0].reshape(-1)
             rows = dist[...,1].reshape(-1)
             

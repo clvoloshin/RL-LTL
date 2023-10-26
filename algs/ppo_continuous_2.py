@@ -312,8 +312,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         state = next_state
     # if terminal:
     #     constr_ep_reward = mdp_ep_reward
-    # if env.mdp.render_live and visualize:
-    #     env.mdp.close()
     if visualize and not env.mdp.render_live:
         if eval:
             save_dir = save_dir
@@ -344,7 +342,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     #print(action)
     return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img, np.array(buchi_visits), np.array(mdp_rewards)
         
-def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=True, save_dir=None, save_model=False, agent=None, n_traj=None):
+def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=False, save_dir=None, save_model=False, agent=None, n_traj=None):
     
     ## G(F(g) & ~b & ~r & ~y)
     #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
@@ -383,7 +381,6 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
         n_traj = param['ppo']['n_traj'] + param['ppo']['n_pretrain_traj']
     for i_episode in tqdm(range(n_traj)):
         # TRAINING
-
         # Get trajectory
         # tic = time.time()
         mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
@@ -467,7 +464,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Tru
     #plt.close()
     return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
 
-def eval_agent(param, runner, env, agent, visualize=True, save_dir=None):
+def eval_agent(param, runner, env, agent, visualize=False, save_dir=None):
     if agent is None:
         agent = PPO(
         env.observation_space, 

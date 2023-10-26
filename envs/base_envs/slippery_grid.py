@@ -78,18 +78,16 @@ class SlipperyGrid(MiniGridEnv):
             see_through_walls=True,
             render_mode="rgb_array"
         )
-        # import pdb; pdb.set_trace()
         super().reset()
-        self.observation_space = gym.spaces.Box(low=np.array([0,0]), high=np.array(shape), dtype=np.int32)
-        #self.observation_space = gym.spaces.Discrete(shape[0] * shape[1])
+
+        self.observation_space = gym.spaces.Discrete(shape[0] * shape[1])
         self.action_space = gym.spaces.Discrete(5)
         self.beta = 1-np.max(self.slip_probability) if isinstance(self.slip_probability, np.ndarray) else 1-self.slip_probability #min non-zero prob
         assert self.beta > 0
 
     def reset(self):
         self.current_state = self.initial_state.copy()
-        return self.current_state, {}
-        # return self.state_to_index(self.current_state), {}
+        return self.state_to_index(self.current_state), {}
     
     def state_to_index(self, state):
         return state[0] * self.shape[1] + state[1]
@@ -99,7 +97,7 @@ class SlipperyGrid(MiniGridEnv):
         return [index // n_columns, index % n_columns]
     
     def T(self, state, action):
-        #state = self.index_to_state(state)
+        state = self.index_to_state(state)
         slipperiness = self.slip_probability[state[0], state[1]] if isinstance(self.slip_probability, np.ndarray) else self.slip_probability
 
         p = np.zeros(self.observation_space.n)
@@ -172,11 +170,15 @@ class SlipperyGrid(MiniGridEnv):
                 next_state = self.current_state
 
         # update current state
-        reward = 1.0 if (next_state != self.current_state) else 0.0
+        
+        if 'wood' in self.state_label(next_state):
+            reward = -5.0
+        else:
+            reward = 0.0
         prev_state = self.current_state
         self.current_state = next_state
 
-        #next_state = self.state_to_index(next_state)
+        next_state = self.state_to_index(next_state)
         # prev_state = self.state_to_index(prev_state)
         try:
             cost = self.cost[prev_state[0], prev_state[1], action_idx]
@@ -184,7 +186,7 @@ class SlipperyGrid(MiniGridEnv):
             import pdb; pdb.set_trace()
         done = False
         info = {'state': self.current_state}
-        return next_state, 0, done, info
+        return next_state, reward, done, info
     
     def cost_shaping(self, prev_index, cur_index, action, automaton_movement, accepting_state_reached, rejecting_state_reached):
         
@@ -208,9 +210,9 @@ class SlipperyGrid(MiniGridEnv):
     def did_succeed(self, *args, **kw):
         return 0
 
-    def label(self, state):
+    def label(self, state_idx):
         # labels = self.labels.get(self.state, None)
-        #state = self.index_to_state(state_idx)
+        state = self.index_to_state(state_idx)
         labels = [self.labels[state[0], state[1]]]
         if labels is None:
             return {}
@@ -219,11 +221,10 @@ class SlipperyGrid(MiniGridEnv):
         
     def set_state(self, state):
         assert (state >= 0) and (state <= self.observation_space.n), 'Setting Environment to invalid state'
-        self.current_state = state #self.index_to_state(state)
+        self.current_state = self.index_to_state(state)
     
     def get_state(self):
-        self.current_state
-        #return self.state_to_index(self.current_state)
+        return self.state_to_index(self.current_state)
 
     def state_label(self, state):
         return self.labels[state[0], state[1]]

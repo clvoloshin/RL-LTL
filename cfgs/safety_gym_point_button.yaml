@@ -1,12 +1,13 @@
 env:
   _target_: 'envs.safetygym_point_button.SafetyGymWrapper'
+  render_mode: None
 classes:
   continuous: 'envs.safetygym_point_button.SafetyGymWrapper'
 logger:
   dir_name: safety_gym
 ltl:
   autobuild: False
-  formula: "G(F(button_0 & X(F(button_1))))" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
+  formula: "G(F(button0 & X(F(button1))))" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
@@ -48,8 +49,8 @@ gamma: .98
 n_grad_updates: 1
 delta: .1
 n_seeds: 10
-init_seed: 623
-replay_buffer_size: 10000
+init_seed: 314
+replay_buffer_size: 1000
 checkpoint_freq__n_episodes: 50
 lambda: 200.0
 lambda_decay_freq__n_episodes: 1000

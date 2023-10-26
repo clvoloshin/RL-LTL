@@ -85,9 +85,9 @@ class CarloEnv:
         self.lane_marker_width = lane_marker_width
         # Let's also add some lane markers on the ground. This is just decorative. Because, why not.
         self.waypoints.append(Painting(Point(self.border_radius  * 2 + (lane_marker_width / 2.), world_height / 2.), Point(lane_marker_width, lane_marker_height), 'blue'))
+        self.waypoints.append(Painting(Point(world_width / 2., world_height / 2.), Point(middle_width, lane_marker_height), 'blue'))
         self.waypoints.append(Painting(Point(world_width - (self.border_radius  * 2 + (lane_marker_width / 2.)), world_height / 2.),
                                        Point(lane_marker_width, lane_marker_height), 'blue'))
-        # self.waypoints.append(Painting(Point(world_width / 2., world_height / 2.), Point(middle_width, lane_marker_height), 'blue'))
         # self.waypoints.append(Painting())
         # self.waypoints.append(CircleBuilding(Point(world_width* (1/6), world_height/2), self.waypoint_radius, 'blue'))
         # self.waypoints.append(CircleBuilding(Point(world_width* (5/6), world_height/2), self.waypoint_radius, 'blue'))

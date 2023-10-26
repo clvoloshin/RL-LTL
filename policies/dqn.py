@@ -71,7 +71,7 @@ class Buffer:
 
     def sample(self, batchsize):
         if self.counter < batchsize:
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             return self.states, self.buchis, self.actions, self.rewards, self.ltl_rewards, self.cycle_rewards, self.next_states, self.next_buchis
         idxs = np.random.random_integers(0, min(self.counter, self.max_-1), batchsize)
         return self.states[idxs], self.buchis[idxs], self.actions[idxs], self.rewards[idxs], self.ltl_rewards[idxs], self.cycle_rewards[idxs], self.next_states[idxs], self.next_buchis[idxs]
@@ -85,11 +85,11 @@ class DQN(nn.Module):
             envsize = env_space['mdp'].shape[0]
         
         self.actor = nn.Sequential(
-                        nn.Linear(envsize, 128),
+                        nn.Linear(envsize, 64),
                         nn.ReLU(),
-                        nn.Linear(128, 128),
+                        nn.Linear(64, 64),
                         nn.ReLU(),
-                        nn.Linear(128, env_space['buchi'].n * act_space['total'])
+                        nn.Linear(64, env_space['buchi'].n * act_space['total'])
                     )
         self.shp = (env_space['buchi'].n, act_space['total'])
             

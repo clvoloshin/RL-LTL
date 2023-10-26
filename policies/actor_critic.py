@@ -66,20 +66,8 @@ class Trajectory:
         return self.next_buchis[-1]
     
     def copy(self):
-        # traj = Trajectory(self.action_placeholder)
-        # traj.states = deepcopy(self.states)
-        # traj.actions = deepcopy(self.actions)
-        # traj.rewards = deepcopy(self.rewards)
-        # traj.next_states = deepcopy(self.next_states)
-        # traj.buchis = deepcopy(self.buchis)
-        # traj.next_buchis = deepcopy(self.next_buchis)
-        # traj.act_idxs = deepcopy(self.act_idxs)
-        # traj.is_eps = deepcopy(self.is_eps)
-        # traj.logprobs = deepcopy(self.logprobs)
-        # traj.counter = deepcopy(self.counter)
-        # return traj
         return deepcopy(self)
-        
+
 
 class RolloutBuffer:
     def __init__(self, state_shp, action_shp, lambda_val, max_ = 1000, to_hallucinate=False) -> None:

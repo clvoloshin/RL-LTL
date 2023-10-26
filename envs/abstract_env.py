@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
-import gym
-import gym.spaces
+import gymnasium as gym
+import gymnasium.spaces
 import numpy as np
 import torch
 from copy import deepcopy
@@ -113,8 +113,8 @@ class Simulator(gym.Env):
     def label(self, state):
         raise NotImplemented
         # return self.mdp.label(state[:self.mdp.observation_space.shape[0]])        
-            
-    def reset(self, make_aut_init_state_random=False):
+             
+    def reset(self, make_aut_init_state_random=False, *args, **kwargs):
         try:
             #allow reset at any point, even if using Monitor
             self.mdp.stats_recorder.done = True
