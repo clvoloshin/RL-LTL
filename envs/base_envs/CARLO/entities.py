@@ -46,7 +46,7 @@ class Entity:
         if self.movable:
             speed = self.speed
             heading = self.heading
-        
+            '''
             # Kinematic bicycle model dynamics based on
             # "Kinematic and Dynamic Vehicle Models for Autonomous Driving Control Design" by
             # Jason Kong, Mark Pfeiffer, Georg Schildbach, Francesco Borrelli
@@ -61,8 +61,9 @@ class Entity:
             angle = (heading + new_heading)/2. + beta
             new_center = self.center + (speed + new_speed)*Point(np.cos(angle), np.sin(angle))*dt / 2.
             new_velocity = Point(new_speed * np.cos(new_heading), new_speed * np.sin(new_heading))
-            
             '''
+            
+            
             # Point-mass dynamics based on
             # "Active Preference-Based Learning of Reward Functions" by
             # Dorsa Sadigh, Anca D. Dragan, S. Shankar Sastry, Sanjit A. Seshia
@@ -78,7 +79,7 @@ class Entity:
             
             new_center = self.center + (self.velocity + new_velocity) * dt / 2.
             
-            '''
+            
             
             self.center = new_center
             self.heading = np.mod(new_heading, 2*np.pi) # wrap the heading angle between 0 and +2pi
