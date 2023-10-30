@@ -9,7 +9,7 @@ from datetime import datetime
 from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_value_iter_2 import run_value_iter
-# from algs.Q_continuous import run_Q_continuous, eval_q_agent
+from algs.Q_continuous import run_Q_continuous, eval_q_agent
 from algs.Q_discrete import run_Q_discrete, eval_q_agent
 from algs.ppo_continuous_2 import run_ppo_continuous_2, eval_agent
 from algs.sac_learning import run_sac
@@ -91,8 +91,21 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
         total_mdps = []
         if method != 'ppo':
             # import pdb; pdb.set_trace()
+            cfg['reward_type'] = first_reward_type
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
-            agent, total_crewards, total_buchis, total_mdps = run_Q_discrete(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir)
+            agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir, n_traj=pretrain_trajs)
+            total_crewards.extend(pre_orig_crewards)
+            total_buchis.extend(buchi_trajs)
+            total_mdps.extend(mdp_trajs)
+            if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
+                agent.reset_entropy()
+            if baseline_type == "ours":
+                agent.reset_entropy()
+            sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
+            agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir, agent=agent, n_traj=train_trajs)
+            total_crewards.extend(full_orig_crewards)
+            total_buchis.extend(buchi_trajs)
+            total_mdps.extend(mdp_trajs)
         else:
         #run_sac(cfg, run, sim)
         #pretraining phase

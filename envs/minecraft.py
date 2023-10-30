@@ -48,14 +48,14 @@ class Minecraft(SlipperyGrid):
         # define the labellings
         labels = np.empty([self.shape[0], self.shape[1]], dtype=object)
         labels[0:10, 0:10] = 'safe'
-        labels[0:3, 5] = 'obstacle'
+        # labels[0:3, 5] = 'obstacle'
         labels[2, 7:10] = 'obstacle'
-        labels[4][5] = labels[8][1] = labels[8][7] = labels[9][9] = 'wood'
-        labels[3][2] = labels[7][3] = labels[5][7] = labels[0][0] = 'wood'
-        labels[2][2] = labels[2][3] = labels[0][8] = labels[4][8] = 'wood'
-        labels[2][1] = labels[3][1] = 'wood'
+        # labels[4][5] = labels[8][1] = labels[8][7] = labels[9][9] = 'grass'
+        # labels[3][2] = labels[7][3] = labels[5][7] = labels[0][0] = 'grass'
+        # labels[2][2] = labels[2][3] = labels[0][8] = labels[4][8] = 'grass'
+        # labels[2][1] = labels[3][1] = 'grass'
         # labels[0][3] = labels[4][0] = labels[6][8] = labels[9][4] = 'iron'
-        labels[2][0] = labels[3][0] = 'grass'
+        labels[2][0] = labels[3][0] = 'wood'
         labels[4][9] = 'work_bench'
         # labels[2][4] = labels[9][0] = labels[7][7] = 'tool_shed'
         labels[0][7] = 'gold'
@@ -106,7 +106,7 @@ class Minecraft(SlipperyGrid):
         rows = []
         cols = []
         if states:
-            dist = np.array([self.index_to_state(x) for x in states])
+            dist = np.array([x for x in states])
             cols = dist[...,0].reshape(-1)
             rows = dist[...,1].reshape(-1)
             

@@ -35,13 +35,14 @@ class Q_learning:
         self.Q_target = DQN(env_space, act_space, param).to(device)
         
         self.optimizer = torch.optim.Adam([
-                        {'params': self.Q.actor.parameters(), 'lr': param['q_learning']['lr']},
+                        {'params': self.Q.actor.parameters(), 'lr': param['q_learning']['lr'], 'betas': (0.9, 0.9)},
                     ])
 
         self.update_target_network()
         self.num_cycles = num_cycles
         self.buffer = Buffer(envsize, self.num_cycles, param['replay_buffer_size'])
         self.good_buffer = Buffer(envsize, self.num_cycles, param['replay_buffer_size'])
+        self.init_temp = param['q_learning']['init_temp']
         self.temp = param['q_learning']['init_temp']
         
         self.n_batches = param['q_learning']['batches_per_update']
@@ -90,7 +91,10 @@ class Q_learning:
             self.temp = min_temp
         
         self.temp = round(self.temp, 4)
-        print(f'Setting temperature: {self.temp}')
+        # print(f'Setting temperature: {self.temp}')
+    
+    def reset_entropy(self):
+        self.temp = self.init_temp
     
     def sample_from_both_buffers(self, batch_size):
         # first, sample (at most) half the data from the good buffer
@@ -115,7 +119,7 @@ class Q_learning:
         for _ in range(self.n_batches):
             self.iterations_since_last_target_update += 1
             with torch.no_grad():
-                s, b, a, r, lr, cr, s_, b_ = self.sample_from_both_buffers(self.batch_size)
+                s, b, a, r, lr, cr, s_, b_ = self.buffer.sample(self.batch_size)
                 #s, b, a, r, lr, cr, s_, b_ = self.buffer.sample(self.batch_size)
                 s = torch.tensor(s).type(torch.float).to(device)
                 b = torch.tensor(b).type(torch.int64).unsqueeze(1).unsqueeze(1).to(device)
@@ -134,7 +138,7 @@ class Q_learning:
             q_values = self.Q(s, b, False).gather(1, a.unsqueeze(1))
             # td_error = q_values - targets.to_tensor(0).unsqueeze(1).clone().detach()
             #import pdb; pdb.set_trace()
-            loss_func = torch.nn.SmoothL1Loss()
+            loss_func = torch.nn.MSELoss()
             loss = loss_func(q_values, targets.to_tensor(0).unsqueeze(1).clone().detach())
             
             if self.ltl_lambda != 0:
@@ -213,6 +217,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
         mdp_ep_reward += rew_info["mdp_reward"]
         ltl_ep_reward += max(rew_info["ltl_reward"])
+        constr_ep_reward += param['gamma']**(t-1) * (agent.ltl_lambda * (visit_buchi) + mdp_reward)
         disc_ep_reward += param['gamma']**(t-1) * mdp_reward
         buchi_visits.append(visit_buchi)
         mdp_rewards.append(mdp_reward)
@@ -236,7 +241,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     #     import pdb; pdb.set_trace()
     return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img, np.array(buchi_visits), np.array(mdp_rewards)
         
-def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None, agent=None):
+def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None, agent=None, n_traj=None):
     if agent is None:
         agent = Q_learning(env.observation_space, env.action_space, param['gamma'], env.num_cycles, param)
     fixed_state, _ = env.reset()
@@ -245,7 +250,9 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
     all_bvisit_trajs = []
     all_mdpr_trajs = []
     test_creward = 0
-    for i_episode in tqdm(range(param['q_learning']['n_traj'])):
+    if n_traj is None:
+        n_traj = param['q_learning']['n_traj']
+    for i_episode in tqdm(range(n_traj)):
         # TRAINING
         # if i_episode > 300:
         #     import pdb; pdb.set_trace()
