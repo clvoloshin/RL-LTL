@@ -1,3 +1,6 @@
 [submodule "envs/base_envs/safety_gym"]
 	path = envs/base_envs/safety_gym
 	url = https://github.com/openai/safety-gym.git
+[submodule "envs/safety-gymnasium"]
+	path = envs/safety-gymnasium
+	url = https://github.com/PKU-Alignment/safety-gymnasium.git

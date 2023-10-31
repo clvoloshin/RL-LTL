@@ -3,8 +3,8 @@ import warnings
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-import gymnasium as gym
-import gymnasium.spaces as spaces
+import gym
+import gym.spaces as spaces
 
 import matplotlib
 import matplotlib.pyplot as plt

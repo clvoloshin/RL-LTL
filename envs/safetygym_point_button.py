@@ -11,7 +11,8 @@ class SafetyGymWrapper:
         #self.original_env.task = 'goal' # reward is for reaching the goal
         self.observe_buttons = True # observe the button positions
         # self.constrain_button = True
-
+        if render_mode == "None":
+            render_mode = None
         self.action_space = self.original_env.action_space
         self.observation_space = self.original_env.observation_space
         self.render_live = True
@@ -73,7 +74,7 @@ class SafetyGymWrapper:
     def step(self, action):
         next_state, reward, cost, terminated, truncated, info = self.original_env.step(action)
         self.state = next_state
-        self.current_cost = cost
+        self.current_cost = info
         self.info = info
         # import pdb; pdb.set_trace()
         return self.state_wrapper(next_state), 0, terminated, info

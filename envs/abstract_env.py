@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
-import gymnasium as gym
-import gymnasium.spaces
+import gym
+#import gymnasium.spaces
 import numpy as np
 import torch
 from copy import deepcopy

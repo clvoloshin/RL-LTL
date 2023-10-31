@@ -23,8 +23,8 @@ ppo:
   lr_critic: 0.01       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
-  n_traj: 2000 
-  n_pretrain_traj: 3000
+  n_traj: 500 
+  n_pretrain_traj: 500
   var_denominator: 1
   alpha: 0.3
   T: 150
