@@ -1,13 +1,14 @@
 import safety_gymnasium
 #safety_gym_env = gym.make('Safexp-PointButton-v0')
 
-# TODO: 
+
 class SafetyGymWrapper:
     # the other functions are already implemented in the safety gym env
     # def label(self):
     # def reward(self):
     def __init__(self, render_mode=None):
         self.original_env = safety_gymnasium.make('SafetyPointButton1-v0', render_mode=render_mode)
+        #self.original_env = ButtonEnvWrapper(config={"agent_name": 'Point'})
         #self.original_env.task = 'goal' # reward is for reaching the goal
         self.observe_buttons = True # observe the button positions
         # self.constrain_button = True
@@ -21,7 +22,8 @@ class SafetyGymWrapper:
         # import pdb; pdb.set_trace()
 
     def reset(self, options=None):
-        state, info = self.original_env.reset(options=options)
+        state, info = self.original_env.reset()
+        # import pdb; pdb.set_trace()
         self.state = state
         self.info = info
         return self.state_wrapper(state), info

@@ -11,7 +11,7 @@ ltl:
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
-  action_std: 1.9                  # starting std for action distribution (Multivariate Normal)
+  action_std: 0.69                  # starting std for action distribution (Multivariate Normal)
   temp_decay_type: 'exponential'
   temp_decay_rate: 0.99       # linearly decay action_std (action_std = action_std - action_std_decay_rate)
   min_action_temp: 0.7             # stop decay after action_std <= min_action_std and switch to learned std
@@ -23,11 +23,11 @@ ppo:
   lr_critic: 0.01       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 1
-  n_traj: 500 
-  n_pretrain_traj: 500
+  n_traj: 3000
+  n_pretrain_traj: 3000
   var_denominator: 1
   alpha: 0.3
-  T: 150
+  T: 300
 q_learning:
   batches_per_update: 5
   batch_size: 128
