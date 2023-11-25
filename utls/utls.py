@@ -7,8 +7,6 @@ from typing import Iterable
 import itertools
 from functools import partial
 from typing import Callable
-import mtl
-from mtl import ast
 
 from flloat.parser.ltlf import LTLfParser
 import flloat

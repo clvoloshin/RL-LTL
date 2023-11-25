@@ -57,11 +57,11 @@ class PPO:
             self.policy.reset_entropy()  # don't include the entropy in the reloaded model to encourage exploration
         
         self.optimizer = torch.optim.Adam([
-                        {'params': self.policy.actor.parameters(), 'lr': lr_actor},
-                        {'params': self.policy.mean_head.parameters(), 'lr': lr_actor},
-                        {'params': self.policy.log_std_head.parameters(), 'lr': lr_actor},
-                        {'params': self.policy.action_switch.parameters(), 'lr': lr_actor},
-                        {'params': self.policy.critic.parameters(), 'lr': lr_critic},
+                        {'params': self.policy.actor.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
+                        {'params': self.policy.mean_head.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
+                        {'params': self.policy.log_std_head.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
+                        {'params': self.policy.action_switch.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
+                        {'params': self.policy.critic.parameters(), 'lr': lr_critic, 'betas': (0.9, 0.9)},
                     ])
 
         self.policy_old = ActorCritic(env_space, act_space, action_std_init, param).to(device)
