@@ -11,7 +11,7 @@ from automaton import Automaton, AutomatonRunner
 from algs.Q_value_iter_2 import run_value_iter
 from algs.Q_continuous import run_Q_continuous, eval_q_agent
 from algs.Q_discrete import run_Q_discrete, eval_q_agent
-from algs.ppo_continuous_2 import run_ppo_continuous_2, eval_agent
+from algs.ppo_continuous_2 import run_ppo_continuous_2, eval_agent, PPO
 from algs.sac_learning import run_sac
 import pickle as pkl
 ROOT = Path(__file__).parent
@@ -79,60 +79,79 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
         pretrain_trajs = 0
         train_trajs = cfg[method]['n_pretrain_traj'] + cfg[method]['n_traj']
         to_hallucinate = False
+    elif baseline_type == "quant":  # baseline method
+        first_reward_type = 0
+        second_reward_type = 0
+        pretrain_trajs = 0
+        train_trajs = cfg[method]['n_pretrain_traj'] + cfg[method]['n_traj']
+        to_hallucinate = False
+    elif baseline_type == "eval": # evaluate an existing model
+        assert cfg["load_path"] is not None
+        assert cfg["load_path"] != ""
     else:
         print("BASELINE TYPE NOT FOUND!")
         import pdb; pdb.set_trace()
-    run_name = cfg['run_name'] + "_" + baseline_type + "_" + '_seed' + str(cfg['init_seed']) + '_lambda' + str(cfg['lambda']) + datetime.now().strftime("%m%d%y_%H%M%S")
+    run_name = cfg['run_name'] + "_" + baseline_type + "_" + '_seed' + str(cfg['init_seed']) + '_lambda' + str(cfg['lambda']) + "_" + datetime.now().strftime("%m%d%y_%H%M%S")
     with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True), name=run_name) as run:
     # run_Q_STL(cfg, run, sim)
     # copt = ConstrainedOptimization(cfg, run, sim)
         total_crewards = []
         total_buchis = []
         total_mdps = []
-        if method != 'ppo':
-            # import pdb; pdb.set_trace()
-            cfg['reward_type'] = first_reward_type
-            sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
-            agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir, n_traj=pretrain_trajs)
-            total_crewards.extend(pre_orig_crewards)
-            total_buchis.extend(buchi_trajs)
-            total_mdps.extend(mdp_trajs)
-            if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
-                agent.reset_entropy()
+        if baseline_type != "eval":
+            if method != 'ppo':
+                # import pdb; pdb.set_trace()
+                if pretrain_trajs != 0:
+                    sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
+                    agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir, n_traj=pretrain_trajs)
+                    total_crewards.extend(pre_orig_crewards)
+                    total_buchis.extend(buchi_trajs)
+                    total_mdps.extend(mdp_trajs)
+                    if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
+                        agent.reset_entropy()
+                    if baseline_type == "ours":
+                        agent.reset_entropy()
+                if train_trajs != 0:
+                    sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
+                    agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir, agent=agent, n_traj=train_trajs)
+                    total_crewards.extend(full_orig_crewards)
+                    total_buchis.extend(buchi_trajs)
+                    total_mdps.extend(mdp_trajs)
+            else:
+                #pretraining phase
+                # TODO: Get this to run modularly like the PPO block of code.
+                sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
+                agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
+                                                                save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
+                total_crewards.extend(pre_orig_crewards)
+                total_buchis.extend(buchi_trajs)
+                total_mdps.extend(mdp_trajs)
+                if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
+                    agent.reset_entropy()
+                if baseline_type == "ours":
+                    agent.reset_entropy()
+                sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
+                agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
+                                                                save_dir=save_dir, save_model=True, agent=agent, n_traj=train_trajs)
+                total_crewards.extend(full_orig_crewards)
+                total_buchis.extend(buchi_trajs)
+                total_mdps.extend(mdp_trajs)
             if baseline_type == "ours":
-                agent.reset_entropy()
-            sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
-            agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_Q_continuous(cfg, run, sim, visualize=cfg["visualize"], save_dir=save_dir, agent=agent, n_traj=train_trajs)
-            total_crewards.extend(full_orig_crewards)
-            total_buchis.extend(buchi_trajs)
-            total_mdps.extend(mdp_trajs)
+                traj_dir = save_dir + '/trajectories'
+                if not os.path.exists(traj_dir):
+                    os.mkdir(traj_dir)
+            else:
+                traj_dir = None
         else:
-        #run_sac(cfg, run, sim)
-        #pretraining phase
-            cfg['reward_type'] = first_reward_type
+            # in evaluation mode
             sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
-            agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
-                                                            save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
-            total_crewards.extend(pre_orig_crewards)
-            total_buchis.extend(buchi_trajs)
-            total_mdps.extend(mdp_trajs)
-            cfg['reward_type'] = second_reward_type
-            if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
-                agent.reset_entropy()
-            if baseline_type == "ours":
-                agent.reset_entropy()
-            sim = Simulator(env, automaton, cfg['lambda'], reward_type=second_reward_type)
-            agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
-                                                            save_dir=save_dir, save_model=True, agent=agent, n_traj=train_trajs)
-            total_crewards.extend(full_orig_crewards)
-            total_buchis.extend(buchi_trajs)
-            total_mdps.extend(mdp_trajs)
-        if baseline_type == "ours":
-            traj_dir = save_dir + '/trajectories'
-            if not os.path.exists(traj_dir):
-                os.mkdir(traj_dir)
-        else:
-            traj_dir = None
+            agent = PPO(env.observation_space, 
+            env.action_space, 
+            cfg['gamma'], 
+            cfg, 
+            to_hallucinate,
+            model_path=cfg['load_path'])
+            # define agent here and load the existing model path (need to import from policy files)
         if method != 'ppo':
             buchi_visits, mdp_reward, combined_rewards = eval_q_agent(cfg, run, sim, agent, save_dir=traj_dir)
         else:

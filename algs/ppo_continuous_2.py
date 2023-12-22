@@ -52,16 +52,16 @@ class PPO:
         self.original_lambda = param['lambda']
 
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
-        if model_path:
+        if model_path and model_path != "":
             self.policy.load_state_dict(torch.load(model_path))
             self.policy.reset_entropy()  # don't include the entropy in the reloaded model to encourage exploration
         
         self.optimizer = torch.optim.Adam([
-                        {'params': self.policy.actor.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
-                        {'params': self.policy.mean_head.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
-                        {'params': self.policy.log_std_head.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
-                        {'params': self.policy.action_switch.parameters(), 'lr': lr_actor, 'betas': (0.9, 0.9)},
-                        {'params': self.policy.critic.parameters(), 'lr': lr_critic, 'betas': (0.9, 0.9)},
+                        {'params': self.policy.actor.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.mean_head.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.log_std_head.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.action_switch.parameters(), 'lr': lr_actor},
+                        {'params': self.policy.critic.parameters(), 'lr': lr_critic},
                     ])
 
         self.policy_old = ActorCritic(env_space, act_space, action_std_init, param).to(device)
@@ -112,7 +112,7 @@ class PPO:
         elif decay_type == 'exponential':
             self.temp = self.temp * decay_rate
         else:
-            raise NotImplemented
+            pass # in the learned entropy setting
         
         if (self.temp <= min_temp):
             self.temp = min_temp
@@ -259,7 +259,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         #reward = int(info['is_accepting'])
         edge = info['edge']
         terminal = info['is_rejecting']
-        constrained_reward, _, rew_info = env.constrained_reward(terminal, state['buchi'], next_state['buchi'], mdp_reward)
+        constrained_reward, _, rew_info = env.constrained_reward(terminal, state['buchi'], next_state['buchi'], mdp_reward, info['rhos'])
         # if testing & visualize:
         #     s = torch.tensor(next_state['mdp']).type(torch.float)
         #     b = torch.tensor([next_state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -284,6 +284,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             constrained_reward, 
             next_state['mdp'], 
             next_state['buchi'], 
+            info['rhos'],
             action_idx, 
             is_eps, 
             all_logprobs,
@@ -343,20 +344,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img, np.array(buchi_visits), np.array(mdp_rewards)
         
 def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=False, save_dir=None, save_model=False, agent=None, n_traj=None):
-    
-    ## G(F(g) & ~b & ~r & ~y)
-    #constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
-    ## G(F(y & X(F(r)))) & G~b
-    #import pdb; pdb.set_trace()
-    ## F(G(y))
-    #constrained_rew_fxn = {1: [env.automaton.edges(1, 1)[0]]}
-    
-    ## F(r & XF(G(y)))
-    #constrained_rew_fxn = {2: [env.automaton.edges(2, 2)[0]]}  
-    #import pdb; pdb.set_trace()
-    ## F(r & XF(g & XF(y))) & G~b
-    # constrained_rew_fxn = {2: [env.automaton.edges(2, 3)[0]], 3: [env.automaton.edges(3, 1)[0]], 1: [env.automaton.edges(1, 0)[0]], 0: [env.automaton.edges(0, 0)[0]]}  
-    # constrained_rew_fxn = {0: [env.automaton.edges(0, 0)[0]]}
     if agent is None:
         agent = PPO(
             env.observation_space, 
@@ -372,7 +359,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
     # disc_success_history = []
     fixed_state, _ = env.reset()
     #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
-    best_creward = 0
+    best_creward = -1 * float('inf')
     all_crewards = []
     all_bvisit_trajs = []
     all_mdpr_trajs = []
@@ -407,7 +394,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
         all_mdpr_trajs.append(mdp_traj)
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
             mdp_test_reward, ltl_test_reward, test_creward, bvisits, img, test_bvisit_traj, test_mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
-            if test_creward > best_creward and save_model:
+            if test_creward >= best_creward and save_model:
                 best_creward = test_creward
                 agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
             testing = True

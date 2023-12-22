@@ -3,4 +3,4 @@
 	url = https://github.com/openai/safety-gym.git
 [submodule "envs/safety-gymnasium"]
 	path = envs/safety-gymnasium
-	url = https://github.com/PKU-Alignment/safety-gymnasium.git
+	url = https://github.com/ameesh-shah/safety-gymnasium.git

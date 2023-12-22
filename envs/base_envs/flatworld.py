@@ -132,7 +132,6 @@ class FlatWorld(gym.Env):
             else:
                 computed_rho = delta / normalization
             all_robustness_vals[idx] = computed_rho
-            self.episode_rhos[region_symbol].append((self.timestep, computed_rho))
         return all_robustness_vals
 
     def custom_reward(self):
@@ -167,9 +166,6 @@ class FlatWorld(gym.Env):
     
     def get_state(self):
         return self.state
-
-    def get_info(self):
-        return {}
     
     def set_state(self, state):
         self.state = state
@@ -219,8 +215,8 @@ class FlatWorld(gym.Env):
         cost = np.linalg.norm(action)
         reward = self.custom_reward()
         terminated = False                  
-
-        return self.state, reward, terminated, {}
+        self.info = {"rhos": self.compute_rho()}
+        return self.state, reward, terminated, self.info
 
     @plotlive
     def render(self, states = [], save_dir=None):

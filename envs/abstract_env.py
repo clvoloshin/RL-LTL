@@ -234,38 +234,57 @@ class Simulator(gym.Env):
             else:
                 reward = 0.0
         return np.array([reward]), not terminal
+
+    def ltl_reward_zero(self, terminal, b, b_, rhos):
+        # check if in a cycle, then evaluate the quantitative semantics
+        cycle_rewards = []
+        for buchi_cycle in self.all_accepting_cycles:
+            if b in buchi_cycle:
+                if b_ == buchi_cycle[b].child.id:
+                    cycle_rewards.append(1.0)
+                else:
+                    cycle_rewards.append(self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos))
+            else:
+                cycle_rewards.append(0.0)
+        if terminal:
+            return np.array(cycle_rewards), True
+        import pdb; pdb.set_trace()
+        return np.array(cycle_rewards), False
     
-    def evaluate_buchi_edge(self, ast_node, rhos):
-        cid = ast_node.id
+    def evaluate_buchi_edge(self, stl_node, rhos):
+        cid = stl_node.id
         if cid == 'True':
             return 1
         elif cid == 'False':
             return -1
         elif cid == "rho":
             # evaluate the robustness function using the rho belonging to that node
-            phi_val = rhos[self.mdp.rho_alphabet.index(ast_node.rho)]
+            phi_val = rhos[self.mdp.rho_alphabet.index(stl_node.rho)]
             return phi_val
         elif cid in ["&", "|"]:
             all_phi_vals = []
-            for child in ast_node.children:
+            for child in stl_node.children:
                 all_phi_vals.append(self.evaluate_buchi_edge(child, rhos))
             # and case and or case are min and max, respectively
             phi_val = min(all_phi_vals) if cid == "&" else max(all_phi_vals)
             return phi_val
         elif cid in ["~", "!"]:  # negation case
-            phi_val = self.evaluate_buchi_edge(ast_node.children[0], rhos)
+            phi_val = self.evaluate_buchi_edge(stl_node.children[0], rhos)
             return -1 * phi_val
 
     def constrained_reward(self, 
                             terminal, 
                             b, 
                             b_, 
-                            mdp_reward
+                            mdp_reward,
+                            rhos
                             ):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
-        if self.reward_type % 2 == 0:  # if it's reward type 2 or 4
+        if self.reward_type in [2, 4]:  # if it's reward type 2 or 4
             ltl_reward, done = self.ltl_reward_2(terminal, b, b_)
+        elif self.reward_type == 0: # use quantitative semantics
+            ltl_reward, done = self.ltl_reward_zero(terminal, b, b_, rhos)
         else:
             ltl_reward, done = self.ltl_reward_1(terminal, b, b_) 
         #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
