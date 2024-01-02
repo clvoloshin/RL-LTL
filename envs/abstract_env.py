@@ -245,10 +245,11 @@ class Simulator(gym.Env):
                 else:
                     cycle_rewards.append(self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos))
             else:
-                cycle_rewards.append(0.0)
+                cycle_rewards.append(-float('inf')) # ignore these
+                # cycle_rewards.append(0.0)
         if terminal:
             return np.array(cycle_rewards), True
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         return np.array(cycle_rewards), False
     
     def evaluate_buchi_edge(self, stl_node, rhos):

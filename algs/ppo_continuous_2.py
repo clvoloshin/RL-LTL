@@ -158,10 +158,14 @@ class PPO:
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
             
-            
+            on_cycle_rewards = torch.where(orig_crewards == -float('inf'), torch.zeros_like(orig_crewards), orig_crewards)
+            on_cycle_mask = torch.where(orig_crewards == -float('inf'), torch.zeros_like(orig_crewards), torch.ones_like(orig_crewards))
+            lrewards = torch.where(on_cycle_mask.sum(dim=0) == 0, -float('inf'), on_cycle_rewards.sum(dim=0) / (on_cycle_mask.sum(dim=0)))
+            #todo: fix this hack
+    
             # take the cycle rewards, and find the cycle that maximizes the summed reward
-            best_cycle_idx = torch.argmax(lrewards.sum(dim=0)).item()
-            crewards = orig_crewards[:, best_cycle_idx]
+            best_cycle_idx = torch.argmax(lrewards).item()
+            crewards = on_cycle_rewards[:, best_cycle_idx]
             #new_crewards = torch.where(crewards > 0, self.ltl_lambda, crewards)
             # if torch.max(lrewards.sum(dim=0)).item() > 0:
             #     import pdb; pdb.set_trace()
@@ -204,6 +208,7 @@ class PPO:
 
             self.optimizer.zero_grad()
             loss.mean().backward()
+            # import pdb; pdb.set_trace()
             # torch.nn.utils.clip_grad_norm_(self.policy.actor.parameters(), max_norm=2.0, norm_type=2)
             self.optimizer.step()
             

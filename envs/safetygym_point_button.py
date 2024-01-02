@@ -94,9 +94,9 @@ class SafetyGymWrapper:
             gremlin_positions = []
         gremlin_dists = [np.linalg.norm(current_pos - gpos) for gpos in gremlin_positions]
         if len(gremlin_dists) == 0:
-            all_robustness_vals.append(-1) # give a positive value, i.e. we're satisfying this part of the spec
+            all_robustness_vals.append(0) # give a positive value, i.e. we're satisfying this part of the spec
         all_robustness_vals.append(-1 * min(gremlin_dists)) # want the closest gremlin distance here
-        return (np.array(all_robustness_vals) - self.rho_min) #** 2
+        return (np.array(all_robustness_vals)) #** 2
 
     def render(self, states = [], save_dir=None, save_states=False):
         states = [s['state'] for s in states]
@@ -110,7 +110,9 @@ class SafetyGymWrapper:
             self.current_cost["cost_gremlins"] = 0
         self.info = info
         self.info["rhos"] = self.compute_rho()
-        # import pdb; pdb.set_trace()
+        # if abs(reward) > 0.1:
+        #     import pdb; pdb.set_trace()
+        # can set reward to reward * 100 to debug
         return self.state_wrapper(next_state), 0, terminated, self.info
     
     def get_state(self):
