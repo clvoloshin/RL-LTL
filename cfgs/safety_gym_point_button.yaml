@@ -1,6 +1,6 @@
 env:
   _target_: 'envs.safetygym_point_button.SafetyGymWrapper'
-  render_mode: None
+  render_mode: None # if set to 'human' it will render live
 classes:
   continuous: 'envs.safetygym_point_button.SafetyGymWrapper'
 logger:
@@ -57,4 +57,4 @@ load_path: ""  # empty if not pre-loading a model, otherwise a string path to th
 model_name: "safetygym_dbug"
 run_name: "safety_gym_debug"
 num_eval_trajs: 50
-baseline: "quant"
+baseline: "quant" # use 'ours' for no quantitative semantics.
