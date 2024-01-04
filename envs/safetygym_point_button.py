@@ -25,7 +25,8 @@ class SafetyGymWrapper:
         self.reset()
         # import pdb; pdb.set_trace()
         self.rho_alphabet = ['button0', 'button1', 'button2', 'button3', 'gremlin']
-        self.rho_min = -2.83 # hardcoded, but the max distance to button
+        self.rho_min = -2.83 # hardcoded, but the max distance to anything in the boxed-in env
+        self.rho_max = 0 # the closest you can get to a region is 0
 
     def construct_obs_space(self):
         new_low = np.append(self.original_env.observation_space.low, np.array([-float('inf'), -float('inf'), -float('inf')]))

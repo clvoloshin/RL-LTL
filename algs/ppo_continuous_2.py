@@ -54,7 +54,7 @@ class PPO:
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
         if model_path and model_path != "":
             self.policy.load_state_dict(torch.load(model_path))
-            self.policy.reset_entropy()  # don't include the entropy in the reloaded model to encourage exploration
+            #self.policy.reset_entropy()  # don't include the entropy in the reloaded model to encourage exploration
         
         self.optimizer = torch.optim.Adam([
                         {'params': self.policy.actor.parameters(), 'lr': lr_actor},
@@ -158,14 +158,10 @@ class PPO:
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
             
-            on_cycle_rewards = torch.where(orig_crewards == -float('inf'), torch.zeros_like(orig_crewards), orig_crewards)
-            on_cycle_mask = torch.where(orig_crewards == -float('inf'), torch.zeros_like(orig_crewards), torch.ones_like(orig_crewards))
-            lrewards = torch.where(on_cycle_mask.sum(dim=0) == 0, -float('inf'), on_cycle_rewards.sum(dim=0) / (on_cycle_mask.sum(dim=0)))
-            #todo: fix this hack
     
             # take the cycle rewards, and find the cycle that maximizes the summed reward
-            best_cycle_idx = torch.argmax(lrewards).item()
-            crewards = on_cycle_rewards[:, best_cycle_idx]
+            best_cycle_idx = torch.argmax(lrewards.sum(dim=0)).item()
+            crewards = orig_crewards[:, best_cycle_idx]
             #new_crewards = torch.where(crewards > 0, self.ltl_lambda, crewards)
             # if torch.max(lrewards.sum(dim=0)).item() > 0:
             #     import pdb; pdb.set_trace()

@@ -243,9 +243,12 @@ class Simulator(gym.Env):
                 if b_ == buchi_cycle[b].child.id:
                     cycle_rewards.append(1.0)
                 else:
-                    cycle_rewards.append(self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos))
+                    rho = self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos)
+                    # normalize the value so it's between 0 and 1
+                    normalized_rho = ((rho - self.mdp.rho_min) / (self.mdp.rho_max - self.mdp.rho_min)) ** 2
+                    cycle_rewards.append(normalized_rho)
             else:
-                cycle_rewards.append(-float('inf')) # ignore these
+                cycle_rewards.append(0) # ignore these
                 # cycle_rewards.append(0.0)
         if terminal:
             return np.array(cycle_rewards), True

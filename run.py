@@ -144,12 +144,13 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
                 traj_dir = None
         else:
             # in evaluation mode
-            sim = Simulator(env, automaton, cfg['lambda'], reward_type=first_reward_type)
-            agent = PPO(env.observation_space, 
-            env.action_space, 
+            sim = Simulator(env, automaton, cfg['lambda'], reward_type=0)
+            traj_dir = None
+            agent = PPO(sim.observation_space, 
+            sim.action_space, 
             cfg['gamma'], 
             cfg, 
-            to_hallucinate,
+            False,
             model_path=cfg['load_path'])
             # define agent here and load the existing model path (need to import from policy files)
         if method != 'ppo':
