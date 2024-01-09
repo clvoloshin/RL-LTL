@@ -54,7 +54,7 @@ class AbstractEnv(metaclass=ABCMeta):
         return T, C
 
 class Simulator(gym.Env):
-    def __init__(self, mdp, automaton, lambda_val, reward_type=2):
+    def __init__(self, mdp, automaton, lambda_val, qs_lambda=1.0, reward_type=2):
         self.mdp = mdp
         self.automaton = automaton
         spaces = {
@@ -80,6 +80,7 @@ class Simulator(gym.Env):
         self.rejecting_states = set()
         self.inf_often = []
         self.lambda_val = lambda_val
+        self.qs_lambda_val = qs_lambda
         self.reward_type = reward_type
         all_accepting_cycles = []
         # import pdb; pdb.set_trace()
@@ -200,7 +201,7 @@ class Simulator(gym.Env):
         # print(f"b_ shape: {b_.shape}")
         # print(f"accepting states: {self.accepting_states}")
         reward, terminal = self.ltl_reward_1_scalar(terminal, b, b_)
-        return np.array([reward]), terminal
+        return np.array([reward]) * self.lambda_val, terminal
         # return torch.isin(b_, self.accepting_states).float(), terminal
 
     def ltl_reward_2(self, terminal, b, b_):
@@ -214,7 +215,7 @@ class Simulator(gym.Env):
                 # if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
                 #     cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
                 if b_ == buchi_cycle[b].child.id:
-                    cycle_rewards.append(1.0)
+                    cycle_rewards.append(1.0 * self.lambda_val)
                     # else:
                     #     cycle_rewards.append(0.0)
                 else:
@@ -230,7 +231,7 @@ class Simulator(gym.Env):
             reward = 0
         if b in self.fixed_cycle:
             if b_ == self.fixed_cycle[b].child.id:
-                reward = 1.0
+                reward = 1.0 * self.lambda_val
             else:
                 reward = 0.0
         return np.array([reward]), not terminal
@@ -241,14 +242,16 @@ class Simulator(gym.Env):
         for buchi_cycle in self.all_accepting_cycles:
             if b in buchi_cycle:
                 if b_ == buchi_cycle[b].child.id:
-                    cycle_rewards.append(1.0)
+                    # import pdb; pdb.set_trace()
+                    cycle_rewards.append(1.0 * self.lambda_val)
                 else:
                     rho = self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos)
                     # normalize the value so it's between 0 and 1
-                    normalized_rho = ((rho - self.mdp.rho_min) / (self.mdp.rho_max - self.mdp.rho_min)) ** 2
-                    cycle_rewards.append(normalized_rho)
+                    normalized_rho = (rho - self.mdp.rho_min) / (self.mdp.rho_max - self.mdp.rho_min)
+                    #normalized_rho = rho
+                    cycle_rewards.append(normalized_rho * self.qs_lambda_val)
             else:
-                cycle_rewards.append(0) # ignore these
+                cycle_rewards.append(self.mdp.rho_min * self.qs_lambda_val) # ignore these
                 # cycle_rewards.append(0.0)
         if terminal:
             return np.array(cycle_rewards), True
@@ -291,10 +294,10 @@ class Simulator(gym.Env):
             ltl_reward, done = self.ltl_reward_zero(terminal, b, b_, rhos)
         else:
             ltl_reward, done = self.ltl_reward_1(terminal, b, b_) 
-        #print(f"REWARD### mdp reward: {mdp_reward.sum()}; ltl reward: {ltl_reward.sum()}")
+        # Here, we moved the lambda calculations to each reward function itself.
         if self.reward_type > 2:
-            return (self.lambda_val * ltl_reward), done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
-        return mdp_reward + (self.lambda_val * ltl_reward), done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
+            return ltl_reward, done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
+        return mdp_reward + ltl_reward, done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
     
     # @timeit
     def step(self, action, is_eps=False):

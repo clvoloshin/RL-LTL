@@ -157,8 +157,7 @@ class PPO:
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_buchis, old_actions, old_action_idxs)
-            
-    
+                
             # take the cycle rewards, and find the cycle that maximizes the summed reward
             best_cycle_idx = torch.argmax(lrewards.sum(dim=0)).item()
             crewards = orig_crewards[:, best_cycle_idx]
@@ -168,7 +167,6 @@ class PPO:
             #import pdb; pdb.set_trace()
             # if best_cycle_idx == 2:
             #     import pdb; pdb.set_trace()
-
             # match state_values tensor dimensions with rewards tensor
             state_values = torch.squeeze(state_values)
             
@@ -274,14 +272,18 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
             # print(agent.Q(s, b))
         # tic = time.time()
         visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
-    
+        
+        # here, transform the ltl reward so that it can be used properly in computation
+        og_ltl_r = rew_info["ltl_reward"]
+        xformed_ltl_reward = og_ltl_r #((og_ltl_r - env.mdp.rho_min) / (env.mdp.rho_max - env.mdp.rho_min))
+
         agent.buffer.add_experience(
             env, 
             state['mdp'], 
             state['buchi'], 
             action, 
             mdp_reward,
-            rew_info["ltl_reward"],
+            xformed_ltl_reward, # transformed ltl quantitative semantics for purpose of cycler computation
             constrained_reward, 
             next_state['mdp'], 
             next_state['buchi'], 
@@ -452,7 +454,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
     #plt.close()
     return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
 
-def eval_agent(param, runner, env, agent, visualize=False, save_dir=None):
+def eval_agent(param, env, agent, visualize=False, save_dir=None):
     if agent is None:
         agent = PPO(
         env.observation_space, 
@@ -469,7 +471,7 @@ def eval_agent(param, runner, env, agent, visualize=False, save_dir=None):
     print("Beginning evaluation.")
     for i_episode in tqdm(range(param["num_eval_trajs"])):
         img_path = save_dir + "/eval_traj_{}.png".format(i_episode) if save_dir is not None else save_dir
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize, save_dir=img_path, eval=True)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, None, testing=False, visualize=visualize, save_dir=img_path, eval=True)
         mdp_rewards.append(mdp_ep_reward)
         avg_buchi_visits.append(bvisits)
         crewards.append(creward)
@@ -477,7 +479,7 @@ def eval_agent(param, runner, env, agent, visualize=False, save_dir=None):
             im = Image.fromarray(img)
             if img_path is not None:
                 im.save(img_path)
-    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
+    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, None, testing=True, visualize=visualize)
     print("Buchi Visits and MDP Rewards for fixed (test) policy at Eval Time:")
     print("Buchi Visits:", test_bvisits)
     print("MDP Reward:", mdp_test_reward)

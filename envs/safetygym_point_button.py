@@ -114,6 +114,7 @@ class SafetyGymWrapper:
         # if abs(reward) > 0.1:
         #     import pdb; pdb.set_trace()
         # can set reward to reward * 100 to debug
+        import pdb; pdb.set_trace()
         return self.state_wrapper(next_state), 0, terminated, self.info
     
     def get_state(self):
