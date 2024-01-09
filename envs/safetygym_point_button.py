@@ -25,7 +25,7 @@ class SafetyGymWrapper:
         self.reset()
         # import pdb; pdb.set_trace()
         self.rho_alphabet = ['button0', 'button1', 'button2', 'button3', 'gremlin']
-        self.rho_min = -2.83 # hardcoded, but the max distance to anything in the boxed-in env
+        self.rho_min = -5.66 # hardcoded, but the max distance to anything in the boxed-in env
         self.rho_max = 0 # the closest you can get to a region is 0
 
     def construct_obs_space(self):
@@ -114,7 +114,7 @@ class SafetyGymWrapper:
         # if abs(reward) > 0.1:
         #     import pdb; pdb.set_trace()
         # can set reward to reward * 100 to debug
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         return self.state_wrapper(next_state), 0, terminated, self.info
     
     def get_state(self):

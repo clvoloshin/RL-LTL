@@ -208,14 +208,14 @@ class Simulator(gym.Env):
         cycle_rewards = []
 
             #return -1, True
-        for buchi_cycle in self.all_accepting_cycles:
+        for idx, buchi_cycle in enumerate(self.all_accepting_cycles):
             # if terminal: # terminal state
             #     cycle_rewards.append(-1.0)
             if b in buchi_cycle:
                 # if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
                 #     cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
                 if b_ == buchi_cycle[b].child.id:
-                    cycle_rewards.append(1.0 * self.lambda_val)
+                    cycle_rewards.append(1.0 * self.lambda_val  / self.acc_cycle_edge_counts[idx])
                     # else:
                     #     cycle_rewards.append(0.0)
                 else:
@@ -231,7 +231,7 @@ class Simulator(gym.Env):
             reward = 0
         if b in self.fixed_cycle:
             if b_ == self.fixed_cycle[b].child.id:
-                reward = 1.0 * self.lambda_val
+                reward = 1.0 * self.lambda_val 
             else:
                 reward = 0.0
         return np.array([reward]), not terminal
@@ -239,16 +239,18 @@ class Simulator(gym.Env):
     def ltl_reward_zero(self, terminal, b, b_, rhos):
         # check if in a cycle, then evaluate the quantitative semantics
         cycle_rewards = []
-        for buchi_cycle in self.all_accepting_cycles:
+        for idx, buchi_cycle in enumerate(self.all_accepting_cycles):
             if b in buchi_cycle:
                 if b_ == buchi_cycle[b].child.id:
                     # import pdb; pdb.set_trace()
-                    cycle_rewards.append(1.0 * self.lambda_val)
+                    cycle_rewards.append(1.0 * self.lambda_val  / self.acc_cycle_edge_counts[idx])
                 else:
                     rho = self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos)
                     # normalize the value so it's between 0 and 1
                     normalized_rho = (rho - self.mdp.rho_min) / (self.mdp.rho_max - self.mdp.rho_min)
                     #normalized_rho = rho
+                    if normalized_rho < 0:
+                        import pdb; pdb.set_trace()
                     cycle_rewards.append(normalized_rho * self.qs_lambda_val)
             else:
                 cycle_rewards.append(self.mdp.rho_min * self.qs_lambda_val) # ignore these
@@ -296,8 +298,8 @@ class Simulator(gym.Env):
             ltl_reward, done = self.ltl_reward_1(terminal, b, b_) 
         # Here, we moved the lambda calculations to each reward function itself.
         if self.reward_type > 2:
-            return ltl_reward, done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
-        return mdp_reward + ltl_reward, done, {"ltl_reward": ltl_reward / self.acc_cycle_edge_counts, "mdp_reward": mdp_reward}
+            return ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
+        return mdp_reward + ltl_reward, done, {"ltl_reward": ltl_reward, "mdp_reward": mdp_reward}
     
     # @timeit
     def step(self, action, is_eps=False):

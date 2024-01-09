@@ -53,7 +53,7 @@ class PPO:
 
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
         if model_path and model_path != "":
-            self.policy.load_state_dict(torch.load(model_path))
+            self.policy.load_state_dict(torch.load(model_path, map_location=torch.device(device)))
             #self.policy.reset_entropy()  # don't include the entropy in the reloaded model to encourage exploration
         
         self.optimizer = torch.optim.Adam([
@@ -313,7 +313,10 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # if terminal:
         #     break
             #constr_ep_reward = mdp_ep_reward
+        if state['buchi'] == 2:
+            import pdb; pdb.set_trace()
         state = next_state
+
     # if terminal:
     #     constr_ep_reward = mdp_ep_reward
     if visualize and not env.mdp.render_live:
