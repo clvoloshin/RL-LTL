@@ -92,6 +92,8 @@ class Simulator(gym.Env):
         self.acc_cycle_edge_counts = self.get_rewarding_edge_counts()
         self.fixed_cycle = None
         self.num_cycles = len(self.all_accepting_cycles)
+        self.previous_rhos = np.zeros(self.num_cycles)  # initialize this to nothing for now
+        self.qs_resets = [False] * self.num_cycles
         print("Found {} cycles".format(self.num_cycles))
         if self.reward_type % 2 != 0: ## IF we have a fixed reward:
             self.num_cycles = 1 # only reward one thing
@@ -240,21 +242,31 @@ class Simulator(gym.Env):
         # check if in a cycle, then evaluate the quantitative semantics
         cycle_rewards = []
         for idx, buchi_cycle in enumerate(self.all_accepting_cycles):
-            if b in buchi_cycle:
+            # if we take a sink transition, penalize that.
+            if (b not in self.rejecting_states) and (b_ in self.rejecting_states):
+                # if we take a sink transition
+                min_delta = self.mdp.rho_min - self.mdp.rho_max
+                cycle_rewards.append(min_delta)
+            elif b in buchi_cycle:
+                rho = self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos)
+                delta = rho - self.previous_rhos[idx]
+                delta = delta * self.qs_lambda_val
+                # self.previous_rhos[idx] = rho
                 if b_ == buchi_cycle[b].child.id:
                     # import pdb; pdb.set_trace()
-                    cycle_rewards.append(1.0 * self.lambda_val  / self.acc_cycle_edge_counts[idx])
+                    delta = delta + (1.0 * self.lambda_val  / self.acc_cycle_edge_counts[idx])
+                    cycle_rewards.append(delta)
+                    new_rho = self.evaluate_buchi_edge(buchi_cycle[b_].stl, rhos)
+                    self.previous_rhos[idx] = new_rho
                 else:
-                    rho = self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos)
-                    # normalize the value so it's between 0 and 1
-                    normalized_rho = (rho - self.mdp.rho_min) / (self.mdp.rho_max - self.mdp.rho_min)
-                    #normalized_rho = rho
-                    if normalized_rho < 0:
-                        import pdb; pdb.set_trace()
-                    cycle_rewards.append(normalized_rho * self.qs_lambda_val)
+                    cycle_rewards.append(delta)
+                    self.previous_rhos[idx] = rho
             else:
-                cycle_rewards.append(self.mdp.rho_min * self.qs_lambda_val) # ignore these
+                # if we're outside the cycle
+                #cycle_rewards.append(min_delta * self.qs_lambda_val) # ignore these
+                cycle_rewards.append(0.0)
                 # cycle_rewards.append(0.0)
+
         if terminal:
             return np.array(cycle_rewards), True
         # import pdb; pdb.set_trace()

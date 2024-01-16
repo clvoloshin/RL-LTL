@@ -329,7 +329,7 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
             
     return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
     
-def eval_q_agent(param, runner, env, agent, visualize=True, save_dir=None):
+def eval_q_agent(param, env, agent, visualize=True, save_dir=None):
     if agent is None:
         agent = Q_learning(
         env.observation_space, 
@@ -346,7 +346,7 @@ def eval_q_agent(param, runner, env, agent, visualize=True, save_dir=None):
     print("Beginning evaluation.")
     for i_episode in tqdm(range(param["num_eval_trajs"])):
         img_path = save_dir + "/eval_traj_{}.png".format(i_episode) if save_dir is not None else save_dir
-        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize, save_dir=img_path, eval=True)
+        mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, None, testing=False, visualize=visualize, save_dir=img_path, eval=True)
         mdp_rewards.append(mdp_ep_reward)
         avg_buchi_visits.append(bvisits)
         crewards.append(creward)
@@ -354,7 +354,7 @@ def eval_q_agent(param, runner, env, agent, visualize=True, save_dir=None):
             im = Image.fromarray(img)
             if img_path is not None:
                 im.save(img_path)
-    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize)
+    mdp_test_reward, ltl_test_reward, test_creward, test_bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, None, testing=True, visualize=visualize)
     print("Buchi Visits and MDP Rewards for fixed (test) policy at Eval Time:")
     print("Buchi Visits:", test_bvisits)
     print("MDP Reward:", mdp_test_reward)

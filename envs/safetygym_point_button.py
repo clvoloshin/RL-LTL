@@ -109,13 +109,17 @@ class SafetyGymWrapper:
         self.current_cost = info
         if "cost_gremlins" not in self.current_cost:
             self.current_cost["cost_gremlins"] = 0
+        if info["cost_hazards"] > 0:
+           new_reward = 1.0
+        else:
+            new_reward = 0
         self.info = info
         self.info["rhos"] = self.compute_rho()
         # if abs(reward) > 0.1:
         #     import pdb; pdb.set_trace()
         # can set reward to reward * 100 to debug
         # import pdb; pdb.set_trace()
-        return self.state_wrapper(next_state), 0, terminated, self.info
+        return self.state_wrapper(next_state), new_reward, terminated, self.info
     
     def get_state(self):
         return self.state_wrapper(self.state)

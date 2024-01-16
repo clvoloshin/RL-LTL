@@ -26,29 +26,32 @@ def main(cfg):
     automaton = AutomatonRunner(Automaton(**cfg['ltl']))
     # make logging dir for wandb to pull from, if necessary
     save_dir = os.path.join(os.getcwd(), 'experiments', cfg['run_name'] + "_" + cfg["baseline"])
-    results_dict = {}
-    results_path = save_dir + '/results_dict.pkl'
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
-    if cfg["baseline"] == "all":
-        baseline_types = ["ours", "baseline", "pretrain_only", "cycler_only"]
-    else:
-        baseline_types = [cfg["baseline"]]
+    baseline = cfg["baseline"]
     if 'continuous' not in cfg['classes']:
         method = "q_learning"
     else:
         method = "ppo"
-    for bline in baseline_types:
-        reward_sequence, buchi_traj_sequence, mdp_traj_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, bline, method=method)
-        results_dict[bline + "_crewards"] = reward_sequence
-        results_dict[bline + "_btrajs"] = buchi_traj_sequence
-        results_dict[bline + "_mdptrajs"] = mdp_traj_sequence
-        results_dict[bline + "_buchi"], results_dict[bline + "_mdp"], results_dict[bline + "_cr"] = eval_results[0], eval_results[1], eval_results[2]
+    for seed in seeds:
+        results_dict = {}
+        results_path = save_dir + '/results_dict_{}.pkl'.format(seed)
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        reward_sequence, buchi_traj_sequence, mdp_traj_sequence, test_reward_sequence, test_buchi_sequence, test_mdp_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, baseline, seed, method=method)
+        results_dict["crewards"] = reward_sequence
+        results_dict["btrajs"] = buchi_traj_sequence
+        results_dict["mdptrajs"] = mdp_traj_sequence
+        results_dict["test_creward_values"] = test_reward_sequence
+        results_dict["test_b_visits"] = test_buchi_sequence
+        results_dict["test_mdp_rewards"] = test_mdp_sequence
+        results_dict["buchi_eval"], results_dict[baseline + "mdp_eval"], results_dict[baseline + "cr_eval"] = eval_results[2], eval_results[3], eval_results[4]
+        results_dict["test_buchi_visits"], results_dict["test_mdp_reward"] = eval_results[0], eval_results[1]
         with open(results_path, 'wb') as f:
             pkl.dump(results_dict, f)
     print(cfg)
 
-def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
+def run_baseline(cfg, env, automaton, save_dir, baseline_type, seed, method="ppo"):
     if baseline_type == "ours":
         first_reward_type = 4
         second_reward_type = 2
@@ -91,12 +94,15 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
     else:
         print("BASELINE TYPE NOT FOUND!")
         import pdb; pdb.set_trace()
-    run_name = cfg['run_name'] + "_" + baseline_type + "_" + '_seed' + str(cfg['init_seed']) + '_lambda' + str(cfg['lambda']) + "_" + datetime.now().strftime("%m%d%y_%H%M%S")
+    run_name = cfg['run_name'] + "_" + baseline_type + "_" + '_seed' + str(seed) + '_lambda' + str(cfg['lambda']) + "_" + datetime.now().strftime("%m%d%y_%H%M%S")
     # run_Q_STL(cfg, run, sim)
     # copt = ConstrainedOptimization(cfg, run, sim)
     total_crewards = []
     total_buchis = []
     total_mdps = []
+    total_test_crewards = []
+    total_test_buchis = []
+    total_test_mdps = []
     if baseline_type != "eval":
         with wandb.init(project="stlq", config=OmegaConf.to_container(cfg, resolve=True), name=run_name) as run:
             if method != 'ppo':
@@ -120,22 +126,31 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
             else:
                 #pretraining phase
                 # TODO: Get this to run modularly like the PPO block of code.
-                sim = Simulator(env, automaton, cfg['lambda'], qs_lambda=cfg['lambda_qs'], reward_type=first_reward_type)
-                agent, pre_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
-                                                                save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
-                total_crewards.extend(pre_orig_crewards)
-                total_buchis.extend(buchi_trajs)
-                total_mdps.extend(mdp_trajs)
-                if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
-                    agent.reset_entropy()
-                if baseline_type == "ours":
-                    agent.reset_entropy()
+                if pretrain_trajs != 0:
+                    sim = Simulator(env, automaton, cfg['lambda'], qs_lambda=cfg['lambda_qs'], reward_type=first_reward_type)
+                    agent, pre_orig_crewards, buchi_trajs, mdp_trajs, all_test_crewards, all_test_bvisits, all_test_mdprs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
+                                                                    save_dir=save_dir, save_model=True, n_traj=pretrain_trajs)
+                    total_crewards.extend(pre_orig_crewards)
+                    total_buchis.extend(buchi_trajs)
+                    total_mdps.extend(mdp_trajs)
+                    total_test_crewards.extend(all_test_crewards)
+                    total_test_buchis.extend(all_test_bvisits)
+                    total_test_mdps.extend(all_test_mdprs)
+                    if first_reward_type != second_reward_type:  # using our pretraining tactic, reset entropy.
+                        agent.reset_entropy()
+                    if baseline_type == "ours":
+                        agent.reset_entropy()
+                else:
+                    agent = None
                 sim = Simulator(env, automaton, cfg['lambda'], qs_lambda=cfg['lambda_qs'], reward_type=second_reward_type)
-                agent, full_orig_crewards, buchi_trajs, mdp_trajs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
+                agent, full_orig_crewards, buchi_trajs, mdp_trajs, all_test_crewards, all_test_bvisits, all_test_mdprs = run_ppo_continuous_2(cfg, run, sim, to_hallucinate=to_hallucinate, visualize=cfg["visualize"],
                                                                 save_dir=save_dir, save_model=True, agent=agent, n_traj=train_trajs)
                 total_crewards.extend(full_orig_crewards)
                 total_buchis.extend(buchi_trajs)
                 total_mdps.extend(mdp_trajs)
+                total_test_crewards.extend(all_test_crewards)
+                total_test_buchis.extend(all_test_bvisits)
+                total_test_mdps.extend(all_test_mdprs)
             if baseline_type == "ours":
                 traj_dir = save_dir + '/trajectories'
                 if not os.path.exists(traj_dir):
@@ -157,25 +172,9 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, method="ppo"):
     if method != 'ppo':
         buchi_visits, mdp_reward, combined_rewards = eval_q_agent(cfg, sim, agent, save_dir=traj_dir)
     else:
-        buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, sim, agent, save_dir=traj_dir)
-    return total_crewards, total_buchis, total_mdps, (buchi_visits, mdp_reward, combined_rewards)
+        test_bvisits, test_mdprew, buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, sim, agent, save_dir=traj_dir)
+    return total_crewards, total_buchis, total_mdps, total_test_crewards, total_test_buchis, total_test_mdps, (test_bvisits, test_mdprew, buchi_visits, mdp_reward, combined_rewards)
     
 
 if __name__ == "__main__":
     main()
-
-## G(F(g) & ~b & ~r & ~y)
-#constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0], env.automaton.edges(0, 0)[0]], 1: [env.automaton.edges(1, 0)[0]]}
-
-## G(F(y & X(F(r)))) & G~b
-#constrained_rew_fxn = {0: [env.automaton.edges(0, 1)[0]], 1: [env.automaton.edges(1, 2)[0]], 2: [env.automaton.edges(2, 0)[0]]}
-#import pdb; pdb.set_trace()
-## F(G(y))
-#constrained_rew_fxn = {1: [env.automaton.edges(1, 1)[0]]}
-
-## F(r & XF(G(y)))
-#constrained_rew_fxn = {2: [env.automaton.edges(2, 2)[0]]}  
-#import pdb; pdb.set_trace()
-## F(r & XF(g & XF(y))) & G~b
-# constrained_rew_fxn = {2: [env.automaton.edges(2, 3)[0]], 3: [env.automaton.edges(3, 1)[0]], 1: [env.automaton.edges(1, 0)[0]], 0: [env.automaton.edges(0, 0)[0]]}  
-# constrained_rew_fxn = {0: [env.automaton.edges(0, 0)[0]]}

@@ -50,6 +50,7 @@ class PPO:
         self.alpha = param['ppo']['alpha']
         self.ltl_lambda = param['lambda']
         self.original_lambda = param['lambda']
+        self.qs_lambda = param['lambda_qs']
 
         self.policy = ActorCritic(env_space, act_space, action_std_init, param).to(device)
         if model_path and model_path != "":
@@ -189,7 +190,7 @@ class PPO:
             # else:
             # normalized_val_loss = val_loss
             if self.ltl_lambda != 0:
-                normalized_val_loss = val_loss / (self.ltl_lambda / (1 - self.gamma))
+                normalized_val_loss = val_loss #/ (self.ltl_lambda) #/ (1 - self.gamma))
             else:
                 normalized_val_loss = val_loss
 
@@ -215,6 +216,9 @@ class PPO:
         self.buffer.clear()
         return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": normalized_val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
+def transform_qs_reward(ltl_reward, agent, env):
+    new_ltl_reward = (ltl_reward - agent.qs_lambda * (env.mdp.rho_min - env.mdp.rho_max)) / ((2 * agent.qs_lambda * (env.mdp.rho_max - env.mdp.rho_min )) + 1e-8) # just in case
+    return new_ltl_reward
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None, eval=False):
     states, buchis = [], []
@@ -275,7 +279,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         
         # here, transform the ltl reward so that it can be used properly in computation
         og_ltl_r = rew_info["ltl_reward"]
-        xformed_ltl_reward = og_ltl_r #((og_ltl_r - env.mdp.rho_min) / (env.mdp.rho_max - env.mdp.rho_min))
+        #xformed_ltl_reward = og_ltl_r #((og_ltl_r - env.mdp.rho_min) / (env.mdp.rho_max - env.mdp.rho_min))
+        # transforming delta
+        xformed_ltl_reward = transform_qs_reward(og_ltl_r, agent, env)
 
         agent.buffer.add_experience(
             env, 
@@ -302,7 +308,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # agent.buffer.atomics.append(info['signal'])
         mdp_ep_reward += rew_info["mdp_reward"]
         ltl_ep_reward += max(rew_info["ltl_reward"])
-        constr_ep_reward += param['gamma']**(t-1) * (agent.original_lambda * (visit_buchi) + mdp_reward)
+        constr_ep_reward += (agent.original_lambda * (visit_buchi) + mdp_reward)
         buchi_visits.append(visit_buchi)
         mdp_rewards.append(mdp_reward)
         total_buchi_visits += visit_buchi
@@ -310,15 +316,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         buchis.append(next_state['buchi'])
         if done:
             break
-        # if terminal:
-        #     break
-            #constr_ep_reward = mdp_ep_reward
-        if state['buchi'] == 2:
-            import pdb; pdb.set_trace()
         state = next_state
 
-    # if terminal:
-    #     constr_ep_reward = mdp_ep_reward
     if visualize and not env.mdp.render_live:
         if eval:
             save_dir = save_dir
@@ -369,6 +368,9 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
     all_crewards = []
     all_bvisit_trajs = []
     all_mdpr_trajs = []
+    all_test_bvisits = []
+    all_test_mdprs = []
+    all_test_crewards = []
     test_creward = 0
     if n_traj is None:
         n_traj = param['ppo']['n_traj'] + param['ppo']['n_pretrain_traj']
@@ -399,10 +401,27 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
         all_bvisit_trajs.append(bvisit_traj)
         all_mdpr_trajs.append(mdp_traj)
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
-            mdp_test_reward, ltl_test_reward, test_creward, bvisits, img, test_bvisit_traj, test_mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+            test_avg_bvisits = 0
+            test_avg_mdp_reward = 0
+            test_avg_ltl_reward = 0
+            test_avg_creward = 0
+            for trial in range(param['testing']['num_rollouts']):
+                mdp_test_reward, ltl_test_reward, test_creward, bvisits, img, test_bvisit_traj, test_mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+                test_avg_bvisits += bvisits
+                test_avg_mdp_reward += mdp_test_reward
+                test_avg_ltl_reward += ltl_test_reward
+                test_avg_creward += test_creward
+            test_avg_bvisits /= param['testing']['num_rollouts']
+            test_avg_mdp_reward /= param['testing']['num_rollouts']
+            test_avg_ltl_reward /= param['testing']['num_rollouts']
+            test_avg_creward /= param['testing']['num_rollouts']
+            test_creward = test_avg_creward
             if test_creward >= best_creward and save_model:
                 best_creward = test_creward
                 agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
+            all_test_bvisits.append(test_avg_bvisits)
+            all_test_mdprs.append(test_avg_mdp_reward)
+            all_test_crewards.append(test_creward)
             testing = True
         else:
             testing = False
@@ -423,10 +442,10 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
                         #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                         'ActionTemp': agent.temp,
                         'EntropyLoss': loss_info["entropy_loss"],
-                        "Test_R_LTL": ltl_test_reward,
-                        "Test_R_MDP": mdp_test_reward,
-                        "Lambda_Val": agent.ltl_lambda,
-                        "Dual Reward": test_creward,
+                        "Test_R_LTL": test_avg_ltl_reward,
+                        "Test_R_MDP": test_avg_mdp_reward,
+                        "Buchi_Visits": test_avg_bvisits,
+                        "Dual Reward": test_avg_creward,
                         "testing": wandb.Image(to_log)
                         })
         else:
@@ -442,10 +461,10 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
                         #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                         'ActionTemp': agent.temp,
                         'EntropyLoss': loss_info["entropy_loss"],
-                        "Test_R_LTL": ltl_test_reward,
-                        "Test_R_MDP": mdp_test_reward,
-                        "Lambda_Val": agent.ltl_lambda,
-                        "Dual Reward": test_creward,
+                        "Test_R_LTL": test_avg_ltl_reward,
+                        "Test_R_MDP": test_avg_mdp_reward,
+                        "Buchi_Visits": test_avg_bvisits,
+                        "Dual Reward": test_avg_creward,
                         })
             
             # avg_timesteps = t #np.mean(timesteps)
@@ -455,7 +474,9 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
             # disc_success_history += [test_data[:, 1].mean()]
             method = "PPO"
     #plt.close()
-    return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
+    # load the best model
+    agent.policy.load_state_dict(torch.load(save_dir + "/" + param["model_name"] + ".pt", map_location=torch.device(device)))
+    return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs, all_test_crewards, all_test_bvisits, all_test_mdprs
 
 def eval_agent(param, env, agent, visualize=False, save_dir=None):
     if agent is None:
@@ -490,4 +511,4 @@ def eval_agent(param, env, agent, visualize=False, save_dir=None):
     print("Average Buchi Visits and Average MDP Rewards for stochastic policy at Eval Time:")
     print("Buchi Visits:", sum(avg_buchi_visits) / len(avg_buchi_visits))
     print("MDP Reward:", sum(mdp_rewards) / len(mdp_rewards))
-    return sum(avg_buchi_visits) / len(avg_buchi_visits), sum(mdp_rewards) / len(mdp_rewards), sum(crewards) / len(crewards)
+    return test_bvisits, mdp_test_reward, sum(avg_buchi_visits) / len(avg_buchi_visits), sum(mdp_rewards) / len(mdp_rewards), sum(crewards) / len(crewards)
