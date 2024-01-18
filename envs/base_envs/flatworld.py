@@ -96,7 +96,9 @@ class FlatWorld(gym.Env):
         self.state = np.array([-1, -1])
         self.render_mode = render_mode
         self.fig, self.ax = plt.subplots(1, 1)
-    
+        self.rho_min = -5.66 # hardcoded, but the max distance to anything in the boxed-in env
+        self.rho_max = 0 # the closest you can get to a region is 0
+            
     def generate_random_rewards(self):
         reward_regions = np.random.uniform(-2, 2, size=(25, 2))  # TODO: set this to be something different, if needed
         for region in reward_regions:
@@ -111,7 +113,7 @@ class FlatWorld(gym.Env):
     
     def compute_rho(self):
         # return a map from string to value for each robustness fxn
-        normalization = np.linalg.norm(self.observation_space.high - self.observation_space.low)
+        # normalization = np.linalg.norm(self.observation_space.high - self.observation_space.low)
         all_robustness_vals = np.zeros(len(self.circles))
         for idx, (region_symbol, circle) in enumerate(self.circles_map.items()):
             coordinates = circle[:2]
@@ -127,10 +129,10 @@ class FlatWorld(gym.Env):
             # else:
             #     computed_rho = -1 * distance * 2 / normalization + 1
             if delta > 0:  # in [-1, 1]
-                computed_rho = 1
+                computed_rho = 0.0
                 #computed_rho = delta / radius
             else:
-                computed_rho = delta / normalization
+                computed_rho = delta #/ normalization
             all_robustness_vals[idx] = computed_rho
         return all_robustness_vals
 
