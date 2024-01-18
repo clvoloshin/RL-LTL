@@ -28,7 +28,11 @@ ppo:
   n_traj: 5000 
   n_pretrain_traj: 0
   var_denominator: 1
+<<<<<<< HEAD
   alpha: 0.1
+=======
+  alpha: 0.1s
+>>>>>>> 8c5c830bc2534e16585bfb0e107aa9a632349e16
   T: 60
 q_learning:
   batches_per_update: 5
@@ -51,6 +55,7 @@ gamma: .98
 n_grad_updates: 1
 delta: .1
 n_seeds: 1
+<<<<<<< HEAD
 init_seed: 150
 replay_buffer_size: 10000
 lambda: 400.0
@@ -59,5 +64,15 @@ visualize: True
 load_path: ""  # 0 if not pre-loading a model, otherwise a string path to the model.
 model_name: "flatworld_model"
 run_name: "fworld_getwork"
+=======
+init_seed: 99
+replay_buffer_size: 10000
+lambda: 300.0
+lambda_qs: 100.0
+visualize: True
+load_path: ""  # 0 if not pre-loading a model, otherwise a string path to the model.
+model_name: "flatworld_model"
+run_name: "fworld_lambda_exp"
+>>>>>>> 8c5c830bc2534e16585bfb0e107aa9a632349e16
 num_eval_trajs: 50
 baseline: "quant"
