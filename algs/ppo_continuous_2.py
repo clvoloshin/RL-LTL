@@ -281,7 +281,10 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         og_ltl_r = rew_info["ltl_reward"]
         #xformed_ltl_reward = og_ltl_r #((og_ltl_r - env.mdp.rho_min) / (env.mdp.rho_max - env.mdp.rho_min))
         # transforming delta
-        xformed_ltl_reward = transform_qs_reward(og_ltl_r, agent, env)
+        if env.reward_type == 0:
+            xformed_ltl_reward = transform_qs_reward(og_ltl_r, agent, env)
+        else:
+            xformed_ltl_reward = og_ltl_r
 
         agent.buffer.add_experience(
             env, 
@@ -306,7 +309,7 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         # if visualize:
         #     env.render()
         # agent.buffer.atomics.append(info['signal'])
-        mdp_ep_reward += rew_info["mdp_reward"]
+        mdp_ep_reward += mdp_reward
         ltl_ep_reward += max(rew_info["ltl_reward"])
         constr_ep_reward += (agent.original_lambda * (visit_buchi) + mdp_reward)
         buchi_visits.append(visit_buchi)

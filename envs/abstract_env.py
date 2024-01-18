@@ -302,7 +302,7 @@ class Simulator(gym.Env):
                             ):
         # will have multiple choices of reward structure
         # TODO: add an automatic structure selection mechanism
-        if self.reward_type in [2, 4]:  # if it's reward type 2 or 4
+        if self.reward_type == 2:  # if it's a cycler-based method
             ltl_reward, done = self.ltl_reward_2(terminal, b, b_)
         elif self.reward_type == 0: # use quantitative semantics
             ltl_reward, done = self.ltl_reward_zero(terminal, b, b_, rhos)
