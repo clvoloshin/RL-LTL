@@ -392,7 +392,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
         # print('Rollout Time', toc)
         # update weights
         # tic = time.time()
-        if i_episode % param['ppo']['update_freq__n_episodes'] == 0:
+        if i_episode % param['ppo']['update_freq__n_episodes'] == 0 or i_episode == 1:
             # import pdb; pdb.set_trace()
             losstuple = agent.update()
             if losstuple is not None:

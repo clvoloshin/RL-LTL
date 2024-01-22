@@ -98,7 +98,7 @@ class Simulator(gym.Env):
         if self.reward_type % 2 != 0: ## IF we have a fixed reward:
             self.num_cycles = 1 # only reward one thing
             self.acc_cycle_edge_counts = [1.]
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
     
     def get_rewarding_edge_counts(self):
         return [len(cyc) for cyc in self.all_accepting_cycles]
