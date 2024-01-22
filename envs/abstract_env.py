@@ -98,7 +98,7 @@ class Simulator(gym.Env):
         if self.reward_type % 2 != 0: ## IF we have a fixed reward:
             self.num_cycles = 1 # only reward one thing
             self.acc_cycle_edge_counts = [1.]
-        # import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()
     
     def get_rewarding_edge_counts(self):
         return [len(cyc) for cyc in self.all_accepting_cycles]
@@ -214,10 +214,10 @@ class Simulator(gym.Env):
             # if terminal: # terminal state
             #     cycle_rewards.append(-1.0)
                         # if we take a sink transition, penalize that.
-            if (b not in self.rejecting_states) and (b_ in self.rejecting_states):
-                # if we take a sink transition
-                cycle_rewards.append(-1.0 * self.lambda_val)
-            elif b in buchi_cycle:
+            # if (not self.automaton.is_rejecting(b)) and self.automaton.is_rejecting(b_):
+            #     # if we take a sink transition
+            #     cycle_rewards.append(-1.0 * self.lambda_val)
+            if b in buchi_cycle:
                 # if b in self.automaton.automaton.accepting_states and b_ not in self.automaton.automaton.accepting_states: 
                 #     cycle_rewards.append(0.0) # if we're leaving an accept state, don't reward it
                 if b_ == buchi_cycle[b].child.id:
@@ -247,12 +247,12 @@ class Simulator(gym.Env):
         cycle_rewards = []
         for idx, buchi_cycle in enumerate(self.all_accepting_cycles):
             # if we take a sink transition, penalize that.
-            if (b not in self.rejecting_states) and (b_ in self.rejecting_states):
+            if (not self.automaton.is_rejecting(b)) and self.automaton.is_rejecting(b_):
                 # if we take a sink transition
                 min_delta = self.mdp.rho_min - self.mdp.rho_max
-                cycle_rewards.append(min_delta * self.qs_lambda_val)
+                cycle_rewards.append(min_delta) #* self.qs_lambda_val)
             elif b in buchi_cycle:
-                rho = self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos)
+                rho = self.evaluate_buchi_edge(buchi_cycle[b].stl, rhos) + 1e-8 # add a small value to avoid the zero xform
                 delta = rho - self.previous_rhos[idx]
                 delta = delta * self.qs_lambda_val
                 # self.previous_rhos[idx] = rho

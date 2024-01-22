@@ -36,7 +36,6 @@ def main(cfg):
     for seed in seeds:
         results_dict = {}
         results_path = save_dir + '/results_dict_{}.pkl'.format(seed)
-        torch.manual_seed(seed)
         np.random.seed(seed)
         reward_sequence, buchi_traj_sequence, mdp_traj_sequence, test_reward_sequence, test_buchi_sequence, test_mdp_sequence, eval_results = run_baseline(cfg, env, automaton, save_dir, baseline, seed, method=method)
         results_dict["crewards"] = reward_sequence

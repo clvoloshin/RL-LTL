@@ -119,20 +119,12 @@ class FlatWorld(gym.Env):
             coordinates = circle[:2]
             radius = self.circles_map[region_symbol][-1]
             distance = np.linalg.norm(self.state - coordinates)
-            delta = radius - distance # if delta > 0 then inside circle, if < 0 then outside
-            
-
-
-
-            # if distance < radius:  # in the region, satisfying the property
-            #     computed_rho = 0 * 2 + 1 #make rho in [-rhomax, rhomax] = [-1, 1]
-            # else:
-            #     computed_rho = -1 * distance * 2 / normalization + 1
-            if delta > 0:  # in [-1, 1]
+            delta = -distance # if delta > 0 then inside circle, if < 0 then outside
+            if distance < radius:  # in [-1, 1]
                 computed_rho = 0.0
                 #computed_rho = delta / radius
             else:
-                computed_rho = delta #/ normalization
+                computed_rho = delta 
             all_robustness_vals[idx] = computed_rho
         return all_robustness_vals
 

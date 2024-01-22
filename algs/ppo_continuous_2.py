@@ -190,7 +190,7 @@ class PPO:
             # else:
             # normalized_val_loss = val_loss
             if self.ltl_lambda != 0:
-                normalized_val_loss = val_loss #/ (self.ltl_lambda) #/ (1 - self.gamma))
+                normalized_val_loss = val_loss / (self.ltl_lambda) #/ (1 - self.gamma))
             else:
                 normalized_val_loss = val_loss
 
@@ -217,7 +217,8 @@ class PPO:
         return loss.mean(), {"policy_grad": policy_grad.detach().mean(), "val_loss": normalized_val_loss.detach().item(), "entropy_loss": entropy_loss.detach().mean()}
     
 def transform_qs_reward(ltl_reward, agent, env):
-    new_ltl_reward = (ltl_reward - agent.qs_lambda * (env.mdp.rho_min - env.mdp.rho_max)) / ((2 * agent.qs_lambda * (env.mdp.rho_max - env.mdp.rho_min )) + 1e-8) # just in case
+    # potentially hacky, but subtract the min value from LTL reward where the values are zero for max computation purposes
+    new_ltl_reward = np.where(ltl_reward == 0, agent.qs_lambda * (env.mdp.rho_min - env.mdp.rho_max), ltl_reward)
     return new_ltl_reward
 
 def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False, save_dir=None, eval=False):
@@ -226,13 +227,14 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     states.append(state['mdp'])
     buchis.append(state['buchi'])
     mdp_ep_reward = 0
-    ltl_ep_reward = 0
     constr_ep_reward = 0
     total_buchi_visits = 0
-    if not testing: 
-        agent.buffer.restart_traj()
+    # if not testing: 
+    agent.buffer.restart_traj()
     buchi_visits = []
     mdp_rewards = []
+    ltl_rewards = []
+    sum_xformed_rewards = np.zeros(env.num_cycles)
     # if testing & visualize:
     #     s = torch.tensor(state['mdp']).type(torch.float)
     #     b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -310,7 +312,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         #     env.render()
         # agent.buffer.atomics.append(info['signal'])
         mdp_ep_reward += mdp_reward
-        ltl_ep_reward += max(rew_info["ltl_reward"])
+        sum_xformed_rewards += xformed_ltl_reward
+        ltl_rewards.append(og_ltl_r)
         constr_ep_reward += (agent.original_lambda * (visit_buchi) + mdp_reward)
         buchi_visits.append(visit_buchi)
         mdp_rewards.append(mdp_reward)
@@ -349,6 +352,9 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     # except:
     #     pass
     #print(action)
+    # import pdb; pdb.set_trace()
+    ltl_ep_reward = np.array(ltl_rewards).sum(axis=0)[np.argmax(sum_xformed_rewards)]
+    # import pdb; pdb.set_trace()
     return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img, np.array(buchi_visits), np.array(mdp_rewards)
         
 def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=False, save_dir=None, save_model=False, agent=None, n_traj=None):
@@ -386,7 +392,7 @@ def run_ppo_continuous_2(param, runner, env, to_hallucinate=False, visualize=Fal
         # print('Rollout Time', toc)
         # update weights
         # tic = time.time()
-        if i_episode % param['ppo']['update_freq__n_episodes'] == 0 or i_episode == 1:
+        if i_episode % param['ppo']['update_freq__n_episodes'] == 0:
             # import pdb; pdb.set_trace()
             losstuple = agent.update()
             if losstuple is not None:
