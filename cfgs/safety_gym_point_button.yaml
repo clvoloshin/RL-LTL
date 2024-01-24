@@ -55,7 +55,7 @@ lambda: 300
 lambda_qs: 100
 visualize: False
 load_path: ""  # empty if not pre-loading a model, otherwise a string path to the model.
-model_name: "sgym_stable_paper_5"
-run_name: "sgym_stable_paper_5"
+model_name: "CYCgym"
+run_name: "CYCgym"
 num_eval_trajs: 50
 baseline: "quant" # use 'ours' for no quantitative semantics.
