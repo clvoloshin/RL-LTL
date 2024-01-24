@@ -110,7 +110,7 @@ class SafetyGymWrapper:
         if "cost_gremlins" not in self.current_cost:
             self.current_cost["cost_gremlins"] = 0
         if info["cost_hazards"] > 0:
-           new_reward = 1.0
+           new_reward = 0.25
         else:
             new_reward = 0
         self.info = info
