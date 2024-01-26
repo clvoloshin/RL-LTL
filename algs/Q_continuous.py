@@ -176,6 +176,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         agent.buffer.restart_traj()
     buchi_visits = []
     mdp_rewards = []
+    ltl_rewards = []
+    sum_xformed_rewards = np.zeros(env.num_cycles)
     # if testing & visualize:
     #     s = torch.tensor(state['mdp']).type(torch.float)
     #     b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
@@ -215,6 +217,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
                 agent.buffer.mark()
         # agent.buffer.atomics.append(info['signal'])
         visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
+        ltl_rewards.append(rew_info["ltl_reward"])
+        sum_xformed_rewards += rew_info["ltl_reward"]
         mdp_ep_reward += rew_info["mdp_reward"]
         ltl_ep_reward += max(rew_info["ltl_reward"])
         constr_ep_reward += param['gamma']**(t-1) * (agent.ltl_lambda * (visit_buchi) + mdp_reward)
@@ -239,16 +243,25 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     #     import pdb; pdb.set_trace()
     # if testing:
     #     import pdb; pdb.set_trace()
+    ltl_ep_reward = np.array(ltl_rewards).sum(axis=0)[np.argmax(sum_xformed_rewards)]
     return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img, np.array(buchi_visits), np.array(mdp_rewards)
+
+def transform_qs_reward(ltl_reward, agent, env):
+    # potentially hacky, but subtract the min value from LTL reward where the values are zero for max computation purposes
+    new_ltl_reward = np.where(ltl_reward == 0, agent.qs_lambda * (env.mdp.rho_min - env.mdp.rho_max), ltl_reward)
+    return new_ltl_reward
         
-def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None, agent=None, n_traj=None):
+def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None, save_model=False, agent=None, n_traj=None):
     if agent is None:
         agent = Q_learning(env.observation_space, env.action_space, param['gamma'], env.num_cycles, param)
     fixed_state, _ = env.reset()
-    best_creward = 0
+    best_creward = -1 * float('inf')
     all_crewards = []
     all_bvisit_trajs = []
     all_mdpr_trajs = []
+    all_test_bvisits = []
+    all_test_mdprs = []
+    all_test_crewards = []
     test_creward = 0
     if n_traj is None:
         n_traj = param['q_learning']['n_traj']
@@ -263,9 +276,31 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
         
         if i_episode % param['q_learning']['temp_decay_freq__n_episodes'] == 0 and i_episode != 0:
             agent.decay_temp(param['q_learning']['temp_decay_rate'], param['q_learning']['min_action_temp'], param['q_learning']['temp_decay_type'])
-        
+        all_crewards.append(creward)
+        all_bvisit_trajs.append(bvisit_traj)
+        all_mdpr_trajs.append(mdp_traj)
         if i_episode % param['testing']['testing_freq__n_episodes'] == 0:
-            mdp_test_reward, ltl_test_reward, test_creward, bvisits, img, test_bvisit_traj, test_mdp_traj = rollout(env, agent, param, i_episode, runner, testing=True, visualize=visualize, save_dir=save_dir)
+            test_avg_bvisits = 0
+            test_avg_mdp_reward = 0
+            test_avg_ltl_reward = 0
+            test_avg_creward = 0
+            for trial in range(param['testing']['num_rollouts']):
+                mdp_test_reward, ltl_test_reward, test_creward, bvisits, img, test_bvisit_traj, test_mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, visualize=visualize, save_dir=save_dir) #param['n_traj']-100) ))
+                test_avg_bvisits += bvisits
+                test_avg_mdp_reward += mdp_test_reward
+                test_avg_ltl_reward += ltl_test_reward
+                test_avg_creward += test_creward
+            test_avg_bvisits /= param['testing']['num_rollouts']
+            test_avg_mdp_reward /= param['testing']['num_rollouts']
+            test_avg_ltl_reward /= param['testing']['num_rollouts']
+            test_avg_creward /= param['testing']['num_rollouts']
+            test_creward = test_avg_creward
+            if test_creward >= best_creward and save_model:
+                best_creward = test_creward
+                agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
+            all_test_bvisits.append(test_avg_bvisits)
+            all_test_mdprs.append(test_avg_mdp_reward)
+            all_test_crewards.append(test_creward)
             testing = True
         else:
             testing = False
@@ -278,9 +313,7 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
         # # frames = 
         #     if testing: 
         #         runner.log({"testing": wandb.Image(save_dir + "/trajectory.png")})
-        all_crewards.append(creward)
-        all_bvisit_trajs.append(bvisit_traj)
-        all_mdpr_trajs.append(mdp_traj)
+
         if visualize and testing:
             if i_episode >= 1 and i_episode % 1 == 0:
                 if img is None: 
@@ -293,12 +326,13 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
                             #'AvgTimesteps': t,
                             #  'TimestepsAlive': avg_timesteps,
                             #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
-                                'ActionTemp': agent.temp,
-                                #'EntropyLoss': loss_info["entropy_loss"],
-                                "Test_R_LTL": ltl_test_reward,
-                                "Test_R_MDP": mdp_test_reward,
-                                "Dual Reward": test_creward,
-                                "testing": wandb.Image(to_log)})
+                            'ActionTemp': agent.temp,
+                            #'EntropyLoss': loss_info["entropy_loss"],
+                            "Test_R_LTL": test_avg_ltl_reward,
+                            "Test_R_MDP": test_avg_mdp_reward,
+                            "Buchi_Visits": test_avg_bvisits,
+                            "Dual Reward": test_avg_creward,
+                            "testing": wandb.Image(to_log)})
             # runner.log({'R_LTL': ltl_ep_reward,
             #     'R_MDP': mdp_ep_reward,
             #     'LossVal': current_loss,
@@ -321,13 +355,14 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
                     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                         'ActionTemp': agent.temp,
                         #'EntropyLoss': loss_info["entropy_loss"],
-                        "Test_R_LTL": ltl_test_reward,
-                        "Test_R_MDP": mdp_test_reward,
-                        "Dual Reward": test_creward,
+                        "Test_R_LTL": test_avg_ltl_reward,
+                        "Test_R_MDP": test_avg_mdp_reward,
+                        "Buchi_Visits": test_avg_bvisits,
+                        "Dual Reward": test_avg_creward,
 
                         })
-            
-    return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs
+    agent.policy.load_state_dict(torch.load(save_dir + "/" + param["model_name"] + ".pt", map_location=torch.device(device)))     
+    return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs, all_test_crewards, all_test_bvisits, all_test_mdprs
     
 def eval_q_agent(param, env, agent, visualize=True, save_dir=None):
     if agent is None:
@@ -362,4 +397,4 @@ def eval_q_agent(param, env, agent, visualize=True, save_dir=None):
     print("Average Buchi Visits and Average MDP Rewards for stochastic policy at Eval Time:")
     print("Buchi Visits:", sum(avg_buchi_visits) / len(avg_buchi_visits))
     print("MDP Reward:", sum(mdp_rewards) / len(mdp_rewards))
-    return sum(avg_buchi_visits) / len(avg_buchi_visits), sum(mdp_rewards) / len(mdp_rewards), sum(crewards) / len(crewards)
+    return test_bvisits, mdp_test_reward, sum(avg_buchi_visits) / len(avg_buchi_visits), sum(mdp_rewards) / len(mdp_rewards), sum(crewards) / len(crewards)
