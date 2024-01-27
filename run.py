@@ -68,7 +68,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, seed, method="ppo
     elif baseline_type == "quant":  # baseline method
         reward_type = 0
         pretrain_trajs = 0
-        to_hallucinate = False
+        to_hallucinate = True
     elif baseline_type == "eval": # evaluate an existing model
         assert cfg["load_path"] is not None
         assert cfg["load_path"] != ""
