@@ -7,7 +7,7 @@ logger:
   dir_name: safety_gym
 ltl:
   autobuild: False
-  formula: "G(F(button1 & X(F(button0)))) & G~gremlin" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
+  formula: "G(F(button1 & X(F(button0) & X(F(button2))))) & G~gremlin" #[["%s & XF(%s)", 2, 0, "wp_%s", "GF(%s)", "GF(%s)"], ["", 0, 0, "G!crash", "", ""]]
   oa_type: ldba
   rabinizer: ./rabinizer4/bin/ltl2ldba
 ppo:
@@ -19,8 +19,8 @@ ppo:
   K_epochs: 1               # update policy for K epochs in one PPO update
   batch_size: 256               # update policy for K epochs in one PPO update
   eps_clip: 0.4          # clip parameter for PPO
-  lr_actor: 0.001       # learning rate for actor network
-  lr_critic: 0.01       # learning rate for critic network
+  lr_actor: 0.002       # learning rate for actor network
+  lr_critic: 0.0125       # learning rate for critic network
   update_timestep: 1 # T * 4
   update_freq__n_episodes: 5
   n_traj: 6000
@@ -48,14 +48,14 @@ testing:
 gamma: .99
 n_grad_updates: 1
 delta: .1
-n_seeds: 2
-init_seed: 300
+n_seeds: 1
+init_seed: 6
 replay_buffer_size: 2000
-lambda: 300
-lambda_qs: 100
+lambda: 400
+lambda_qs: 50
 visualize: False
 load_path: ""  # empty if not pre-loading a model, otherwise a string path to the model.
-model_name: "CYCgym"
-run_name: "CYCgym"
+model_name: "quantFINAL"
+run_name: "quantFINAL"
 num_eval_trajs: 50
 baseline: "quant" # use 'ours' for no quantitative semantics.
