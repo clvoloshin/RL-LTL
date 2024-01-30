@@ -58,6 +58,8 @@ class SlipperyGrid(MiniGridEnv):
         self.slip_probability = slip_probability
         self.sink_states = sink_states
         self.labels = None
+        self.rho_alphabet = None
+        self.rho_locations = None
 
         # directional actions
         self.action_map = [
@@ -76,9 +78,10 @@ class SlipperyGrid(MiniGridEnv):
             max_steps=1000,
             # Set this to True for maximum speed
             see_through_walls=True,
-            render_mode="rgb_array"
+            render_mode="rgb_array",
+            agent_view_size= 3,
+            highlight=False
         )
-        # import pdb; pdb.set_trace()
         super().reset()
         self.observation_space = gym.spaces.Box(low=np.array([0,0]), high=np.array(shape), dtype=np.int32)
         #self.observation_space = gym.spaces.Discrete(shape[0] * shape[1])
@@ -97,6 +100,20 @@ class SlipperyGrid(MiniGridEnv):
     def index_to_state(self, index):
         n_columns = self.shape[1]
         return [index // n_columns, index % n_columns]
+
+    def compute_rho(self):
+        # return a map from string to value for each robustness fxn
+        all_robustness_vals = []
+
+        for label in self.rho_alphabet:
+            if label not in self.rho_locations:
+                all_robustness_vals.append(0)
+            else:
+                locations = np.array(self.rho_locations[label])
+                dist = np.sum(np.abs(locations - self.current_state), axis=1)
+                all_robustness_vals.append(-1 * min(dist))
+
+        return np.array(all_robustness_vals)
     
     def T(self, state, action):
         #state = self.index_to_state(state)
@@ -144,8 +161,8 @@ class SlipperyGrid(MiniGridEnv):
             # slipperiness
             if np.random.uniform() < slipperiness:
                 action_idx = np.random.choice(self.action_space.n)
-
-            action = self.action_map[action_idx]
+            # import pdb; pdb.set_trace()
+            action = self.action_map[int(action_idx)]
 
             # grid movement dynamics:
             if action == 'right':
@@ -173,7 +190,7 @@ class SlipperyGrid(MiniGridEnv):
 
         # update current state        
         if 'grass' in self.state_label(next_state):
-            reward = 1.0
+            reward = -1.0
         else:
             reward = 0.0
         prev_state = self.current_state
@@ -187,14 +204,13 @@ class SlipperyGrid(MiniGridEnv):
             import pdb; pdb.set_trace()
         done = False
         info = {'state': self.current_state}
-        return next_state, reward, done, info
+        info["rhos"] = self.compute_rho()
+        self.info = info
+        return next_state, reward, done, self.info
     
     def cost_shaping(self, prev_index, cur_index, action, automaton_movement, accepting_state_reached, rejecting_state_reached):
         
         cost = 1
-
-        # if (automaton_movement and not rejecting_state_reached):
-        #     cost = .5
         
         if accepting_state_reached:
             cost = 0
@@ -237,11 +253,6 @@ class SlipperyGrid(MiniGridEnv):
         self.agent_dir = 0
         self.grid = Grid(width, height)
         self.mission = ''
-        #import pdb; pdb.set_trace()
-        # for row in range(len(labels)):
-        #     for col, label in enumerate(labels[row]):
-        #         if label == 'safe': continue
-        #         self.grid.set(row, col, Floor())
     
     def render(self, mode='rgb_array', **kw):
         self.agent_pos = tuple(self.current_state[::-1])

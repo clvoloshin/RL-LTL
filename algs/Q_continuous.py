@@ -58,6 +58,9 @@ class Q_learning:
     def update_target_network(self):
         # copy current_network to target network
         self.Q_target.load_state_dict(self.Q.state_dict())
+
+    def save_model(self, save_path):
+        torch.save(self.Q.state_dict(), save_path)
     
     def select_action(self, state, is_testing):
         if is_testing or (np.random.uniform() > self.temp):
@@ -131,8 +134,6 @@ class Q_learning:
                 a = torch.tensor(a).to(device)
                 best_cycle_idx = torch.argmax(lr.sum(dim=0)).item()
                 crewards = cr[:, best_cycle_idx].float()
-                # if sum(crewards) > 0:
-                #     import pdb; pdb.set_trace()
                 targets = crewards + self.gamma * self.Q_target(s_, b_).amax(1)
 
             q_values = self.Q(s, b, False).gather(1, a.unsqueeze(1))
@@ -146,16 +147,11 @@ class Q_learning:
             else:
                 normalized_val_loss = loss
 
-            # loss = (td_error**2).mean() # MSE
-
             # backward optimize
             self.optimizer.zero_grad()
             normalized_val_loss.backward()
             self.optimizer.step()
 
-            
-            # if loss.item() < 5:
-            #     import pdb; pdb.set_trace()
             
             if (self.iterations_since_last_target_update % self.iterations_per_target_update) == 0:
                 self.update_target_network()
@@ -178,11 +174,6 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     mdp_rewards = []
     ltl_rewards = []
     sum_xformed_rewards = np.zeros(env.num_cycles)
-    # if testing & visualize:
-    #     s = torch.tensor(state['mdp']).type(torch.float)
-    #     b = torch.tensor([state['buchi']]).type(torch.int64).unsqueeze(1).unsqueeze(1)
-        #print(0, state['mdp'], state['buchi'], agent.Q(s, b).argmax().to_tensor(0).numpy())
-        #print(agent.Q(s, b))
     
     for t in range(1, param['q_learning']['T']):  # Don't infinite loop while learning
         action, is_eps = agent.select_action(state, testing)
@@ -190,14 +181,14 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
         next_state, mdp_reward, done, info = env.step(action, is_eps)
         
         terminal = info['is_rejecting']
-        constrained_reward, _, rew_info = env.constrained_reward(terminal, state['buchi'], next_state['buchi'], mdp_reward)
+        constrained_reward, _, rew_info = env.constrained_reward(terminal, state['buchi'], next_state['buchi'], mdp_reward, info["rhos"])
 
         if not testing: # TRAIN ONLY
             # Simulate step for each buchi state
             if not is_eps:
                 for buchi_state in range(env.observation_space['buchi'].n):
                     next_buchi_state, is_accepting = env.next_buchi(next_state['mdp'], buchi_state)
-                    new_const_rew, _, new_rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
+                    new_const_rew, _, new_rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward, info["rhos"])
                     agent.collect(state['mdp'], buchi_state, action, mdp_reward, new_rew_info["ltl_reward"], new_const_rew, next_state['mdp'], next_buchi_state)
                     if buchi_state == state['buchi']:
                         agent.buffer.mark()
@@ -206,22 +197,21 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
                     try:                        
                         for eps_idx in range(env.action_space[buchi_state].n):
                             next_buchi_state, is_accepting = env.next_buchi(state['mdp'], buchi_state, eps_idx)
-                            new_const_rew, _, new_rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward)
+                            new_const_rew, _, new_rew_info = env.constrained_reward(terminal, buchi_state, next_buchi_state, mdp_reward, info["rhos"])
                             agent.collect(state['mdp'], buchi_state, action, mdp_reward, new_rew_info["ltl_reward"], new_const_rew, next_state['mdp'], next_buchi_state)
                     except:
                         pass
 
             else:
                 # no reward for epsilon transition !
-                agent.collect(state['mdp'], buchi_state, action, mdp_reward, rew_info["ltl_reward"], constrained_reward, next_state['mdp'], next_buchi_state)
+                agent.collect(state['mdp'], buchi_state, action, mdp_reward, rew_info["ltl_reward"], constrained_reward, next_state['mdp'], next_buchi_state, info["rhos"])
                 agent.buffer.mark()
-        # agent.buffer.atomics.append(info['signal'])
         visit_buchi = next_state['buchi'] in env.automaton.automaton.accepting_states
         ltl_rewards.append(rew_info["ltl_reward"])
         sum_xformed_rewards += rew_info["ltl_reward"]
         mdp_ep_reward += rew_info["mdp_reward"]
         ltl_ep_reward += max(rew_info["ltl_reward"])
-        constr_ep_reward += param['gamma']**(t-1) * (agent.ltl_lambda * (visit_buchi) + mdp_reward)
+        constr_ep_reward += (agent.ltl_lambda * (visit_buchi) + mdp_reward)
         disc_ep_reward += param['gamma']**(t-1) * mdp_reward
         buchi_visits.append(visit_buchi)
         mdp_rewards.append(mdp_reward)
@@ -245,13 +235,8 @@ def rollout(env, agent, param, i_episode, runner, testing=False, visualize=False
     #     import pdb; pdb.set_trace()
     ltl_ep_reward = np.array(ltl_rewards).sum(axis=0)[np.argmax(sum_xformed_rewards)]
     return mdp_ep_reward, ltl_ep_reward, constr_ep_reward, total_buchi_visits, img, np.array(buchi_visits), np.array(mdp_rewards)
-
-def transform_qs_reward(ltl_reward, agent, env):
-    # potentially hacky, but subtract the min value from LTL reward where the values are zero for max computation purposes
-    new_ltl_reward = np.where(ltl_reward == 0, agent.qs_lambda * (env.mdp.rho_min - env.mdp.rho_max), ltl_reward)
-    return new_ltl_reward
         
-def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None, save_model=False, agent=None, n_traj=None):
+def run_Q_continuous(param, runner, env, second_order = False, visualize=True, save_dir=None, save_model=True, agent=None, n_traj=None):
     if agent is None:
         agent = Q_learning(env.observation_space, env.action_space, param['gamma'], env.num_cycles, param)
     fixed_state, _ = env.reset()
@@ -263,12 +248,10 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
     all_test_mdprs = []
     all_test_crewards = []
     test_creward = 0
+    best_agent = None
     if n_traj is None:
         n_traj = param['q_learning']['n_traj']
     for i_episode in tqdm(range(n_traj)):
-        # TRAINING
-        # if i_episode > 300:
-        #     import pdb; pdb.set_trace()
         mdp_ep_reward, ltl_ep_reward, creward, bvisits, img, bvisit_traj, mdp_traj = rollout(env, agent, param, i_episode, runner, testing=False, save_dir=save_dir)
         
         if i_episode % param['q_learning']['update_freq__n_episodes'] == 0:
@@ -297,6 +280,7 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
             test_creward = test_avg_creward
             if test_creward >= best_creward and save_model:
                 best_creward = test_creward
+                best_agent = agent.Q.state_dict()
                 agent.save_model(save_dir + "/" + param["model_name"] + ".pt")
             all_test_bvisits.append(test_avg_bvisits)
             all_test_mdprs.append(test_avg_mdp_reward)
@@ -304,15 +288,6 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
             testing = True
         else:
             testing = False
-            #import pdb; pdb.set_trace()
-        # if img is not None:
-        #     if testing: 
-        #         runner.log({"testing": wandb.Image(img)})
-        # elif save_dir is not None:  # if we're in an environment that can't generate an image as in-python array
-        #     # load image from save dir
-        # # frames = 
-        #     if testing: 
-        #         runner.log({"testing": wandb.Image(save_dir + "/trajectory.png")})
 
         if visualize and testing:
             if i_episode >= 1 and i_episode % 1 == 0:
@@ -323,45 +298,27 @@ def run_Q_continuous(param, runner, env, second_order = False, visualize=True, s
                 runner.log({'R_LTL': ltl_ep_reward,                
                             'R_MDP': mdp_ep_reward,
                             'LossVal': current_loss,
-                            #'AvgTimesteps': t,
-                            #  'TimestepsAlive': avg_timesteps,
-                            #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
                             'ActionTemp': agent.temp,
-                            #'EntropyLoss': loss_info["entropy_loss"],
                             "Test_R_LTL": test_avg_ltl_reward,
                             "Test_R_MDP": test_avg_mdp_reward,
                             "Buchi_Visits": test_avg_bvisits,
                             "Dual Reward": test_avg_creward,
                             "testing": wandb.Image(to_log)})
-            # runner.log({'R_LTL': ltl_ep_reward,
-            #     'R_MDP': mdp_ep_reward,
-            #     'LossVal': current_loss,
-            #     #'AvgTimesteps': t,
-            #     #  'TimestepsAlive': avg_timesteps,
-            #     #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
-            #         'ActionTemp': agent.temp,
-            #         #'EntropyLoss': loss_info["entropy_loss"],
-            #         "Test_R_LTL": ltl_test_reward,
-            #         "Test_R_MDP": mdp_test_reward
-            #         "testing": wandb.Image(to_log)})
         else:
             if i_episode % 1 == 0:
                 runner.log({#'Iteration': i_episode,
                     'R_LTL': ltl_ep_reward,
                     'R_MDP': mdp_ep_reward,
                     'LossVal': current_loss,
-                    #'AvgTimesteps': t,
-                    #  'TimestepsAlive': avg_timesteps,
-                    #  'PercTimeAlive': (avg_timesteps + 1) / param['q_learning']['T'],
-                        'ActionTemp': agent.temp,
-                        #'EntropyLoss': loss_info["entropy_loss"],
-                        "Test_R_LTL": test_avg_ltl_reward,
-                        "Test_R_MDP": test_avg_mdp_reward,
-                        "Buchi_Visits": test_avg_bvisits,
-                        "Dual Reward": test_avg_creward,
+                    'ActionTemp': agent.temp,
+                    "Test_R_LTL": test_avg_ltl_reward,
+                    "Test_R_MDP": test_avg_mdp_reward,
+                    "Buchi_Visits": test_avg_bvisits,
+                    "Dual Reward": test_avg_creward,
 
                         })
-    agent.policy.load_state_dict(torch.load(save_dir + "/" + param["model_name"] + ".pt", map_location=torch.device(device)))     
+    # import pdb; pdb.set_trace()
+    agent.Q.load_state_dict(best_agent)     
     return agent, all_crewards, all_bvisit_trajs, all_mdpr_trajs, all_test_crewards, all_test_bvisits, all_test_mdprs
     
 def eval_q_agent(param, env, agent, visualize=True, save_dir=None):
@@ -374,7 +331,6 @@ def eval_q_agent(param, env, agent, visualize=True, save_dir=None):
         param, 
         model_path=param['load_path'])
     fixed_state, _ = env.reset()
-    #runner.log({"testing": wandb.Image(env.render(states=[fixed_state['mdp']], save_dir=None))})
     crewards = []
     mdp_rewards = []
     avg_buchi_visits = []
