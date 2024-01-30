@@ -10,9 +10,7 @@ from envs.abstract_env import Simulator
 from automaton import Automaton, AutomatonRunner
 from algs.Q_value_iter_2 import run_value_iter
 from algs.Q_continuous import run_Q_continuous, eval_q_agent
-from algs.Q_discrete import run_Q_discrete, eval_q_agent
 from algs.ppo_continuous_2 import run_ppo_continuous_2, eval_agent, PPO
-from algs.sac_learning import run_sac
 import pickle as pkl
 ROOT = Path(__file__).parent
 
@@ -126,7 +124,7 @@ def run_baseline(cfg, env, automaton, save_dir, baseline_type, seed, method="ppo
         model_path=cfg['load_path'])
         # define agent here and load the existing model path (need to import from policy files)
     if method != 'ppo':
-        buchi_visits, mdp_reward, combined_rewards = eval_q_agent(cfg, sim, agent, save_dir=traj_dir)
+        test_bvisits, test_mdprew, buchi_visits, mdp_reward, combined_rewards = eval_q_agent(cfg, sim, agent, save_dir=traj_dir)
     else:
         test_bvisits, test_mdprew, buchi_visits, mdp_reward, combined_rewards = eval_agent(cfg, sim, agent, save_dir=traj_dir)
     return total_crewards, total_buchis, total_mdps, total_test_crewards, total_test_buchis, total_test_mdps, (test_bvisits, test_mdprew, buchi_visits, mdp_reward, combined_rewards)
